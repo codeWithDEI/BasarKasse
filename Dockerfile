@@ -11,8 +11,8 @@ WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 BASAR_DATABASE=/data/basarkasse.sqlite NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
-COPY --from=build /app /app
-RUN mkdir -p /data && chown -R node:node /data /app
+COPY --from=build --chown=node:node /app /app
+RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data
 EXPOSE 3000
