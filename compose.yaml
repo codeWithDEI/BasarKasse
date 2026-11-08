@@ -1,0 +1,16 @@
+services:
+  basarkasse:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - basar-data:/data
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      BASAR_DATABASE: /data/basarkasse.sqlite
+      BASAR_PUBLIC_ORIGIN: ${BASAR_PUBLIC_ORIGIN:-http://localhost:3000}
+volumes:
+  basar-data:

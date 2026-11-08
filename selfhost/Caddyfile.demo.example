@@ -1,0 +1,16 @@
+# Import inside the canonical HTTPS site. Keep the real hash outside Git.
+@basarkasseDemo path /basarkasse /basarkasse/*
+log_skip @basarkasseDemo
+handle @basarkasseDemo {
+    basic_auth {
+        foerderverein REPLACE_WITH_CADDY_PASSWORD_HASH
+    }
+    header {
+        X-Robots-Tag "noindex, nofollow, noarchive"
+        Cache-Control "no-store"
+    }
+    reverse_proxy basarkasse-demo:3000 {
+        header_up -Authorization
+        header_up -CF-Connecting-IP
+    }
+}

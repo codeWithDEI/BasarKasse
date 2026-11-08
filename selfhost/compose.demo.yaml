@@ -1,0 +1,46 @@
+name: basarkasse-demo
+services:
+  basarkasse-demo:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_PATH: /basarkasse
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      BASAR_DATABASE: /data/basarkasse.sqlite
+      BASAR_PUBLIC_ORIGIN: ${BASAR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
+      NEXT_PUBLIC_BASE_PATH: /basarkasse
+      NEXT_TELEMETRY_DISABLED: 1
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    volumes:
+      - demo-data:/data
+    networks:
+      - portal
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/basarkasse/api/basar').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+volumes:
+  demo-data:
+networks:
+  portal:
+    external: true
+    name: roetgesportal_backend

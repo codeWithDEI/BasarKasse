@@ -1,0 +1,1 @@
+ALTER TABLE `sales` ADD `donation` integer DEFAULT 0 NOT NULL;
