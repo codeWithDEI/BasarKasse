@@ -46,3 +46,23 @@ test('Die zusätzliche Spalte erhält bestehende Verkäufe mit Aufrundung null',
  for(const file of files.slice(1))old.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
  const row=old.sqlite.prepare('SELECT total,donation,received FROM sales WHERE id=?').get('old-sale');assert.equal(row.total,650);assert.equal(row.donation,0);assert.equal(row.received,1000);old.close();
 });
+
+test('Storno verlangt verfügbares Bargeld einschließlich Trinkgeld und bleibt bei Ablehnung unverändert',async()=>{
+ const created=await cmd('createEvent',{name:'Rückzahlung nach Entnahme',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const run=(action,p={})=>cmd(action,{eventId:created.eventId,...p});
+ const {tillId:cash}=await run('openTill',{number:1,opening:0});
+ const sale=await run('sale',{tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation:50,received:700});
+ await run('movement',{tillId:cash,amount:-700,reason:'Entnahme in Hauptkasse'});
+ await assert.rejects(()=>run('void',{saleId:sale.saleId,reason:'Einkauf zurückgeben'}),/Rückzahlung/);
+ const {tillBalance}=await import('../lib/basar/domain.ts');
+ let s=await readState(created.eventId,manager);assert.equal(s.sales[0].voided_at,null);assert.equal(tillBalance(s,s.tills[0]),0);
+ await run('movement',{tillId:cash,amount:700,reason:'Bargeld für Rückzahlung'});
+ await run('void',{saleId:sale.saleId,reason:'Einkauf zurückgeben'});
+ s=await readState(created.eventId,manager);assert.ok(s.sales[0].voided_at);assert.equal(tillBalance(s,s.tills[0]),0);
+});
+
+test('Ein geänderter Client-IP-Header umgeht die kontobezogene Anmeldesperre nicht',async()=>{
+ const id=crypto.randomUUID();await cmd('addStaff',{operationId:id,name:'Loginbegrenzung Test',pin:'5826',role:'cashier'});
+ for(let n=0;n<10;n++)await assert.rejects(()=>login(id,'0000',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.10'}})),/PIN/);
+ await assert.rejects(()=>login(id,'5826',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.11'}})),e=>e.status===429);
+});

@@ -32,6 +32,10 @@ Die vorgegebene Übungsveranstaltung hat Verkäufernummern 1–150, drei Kassen 
 - Verkäuferabrechnung, CSV-Exporte, Druck / PDF über den Browser, JSON-Datenexport und Aktivitätsprotokoll.
 - Automatische Aktualisierung der zentralen Übersicht alle zwölf Sekunden; vor jeder Buchung wird der aktuelle Zustand serverseitig geprüft.
 
+## Geschützte Vorführung für den Förderverein
+
+Die separate Demo-Installation für den Portal-Server ist in [selfhost/README-demo.md](selfhost/README-demo.md) beschrieben. Sie verwendet `/basarkasse`, einen zusätzlichen HTTPS-Zugangsschutz und eine eigene Testdatenbank. Die Betriebs- und Sicherheitskorrekturen werden durch zusätzliche HTTP- und Buchungstests abgesichert.
+
 ## Eigenen Server verwenden
 
 Die Oberfläche und Buchungslogik sind dieselben wie in der gehosteten Vorschau. Lokal arbeitet Next.js mit einer SQLite-Datei; die Vorschau verwendet D1. Die SQLite-Datei liegt außerhalb des Quellcodes. Es gibt keine Abhängigkeit von WordPress oder einem ChatGPT-Login für die eigene Installation.
@@ -44,6 +48,8 @@ Voraussetzung: Linux mit Docker Compose oder Node.js 24 und pnpm 11.25.0. Vor ei
 docker compose up -d --build
 ```
 
+Für einen HTTPS-Reverse-Proxy muss `BASAR_PUBLIC_ORIGIN` auf die öffentliche HTTPS-Origin gesetzt werden, etwa `https://kasse.example.org`, ohne Pfad.
+
 Die Anwendung lauscht danach nur am Host-Loopback unter `127.0.0.1:3000`. Das benannte Volume `basar-data` enthält die SQLite-Datenbank und bleibt bei Containerwechsel erhalten. Für den Zugang auf Tablets einen HTTPS-Reverse-Proxy auf dem vorhandenen Server konfigurieren. Ein Beispiel für den `location`-Block liegt in `selfhost/nginx.example.conf`. Die konkrete Domain und TLS-Konfiguration gehören zum vorhandenen Server.
 
 Das Docker-Image baut die getestete Next.js-Variante. Docker selbst wurde in der Entwicklungsumgebung nicht ausgeführt.
@@ -55,7 +61,7 @@ corepack enable
 corepack prepare pnpm@11.25.0 --activate
 pnpm install --frozen-lockfile
 pnpm run build:selfhost
-HOSTNAME=127.0.0.1 PORT=3000 BASAR_DATABASE=/var/lib/basarkasse/basarkasse.sqlite pnpm run start:selfhost
+BASAR_PUBLIC_ORIGIN=http://127.0.0.1:3000 HOSTNAME=127.0.0.1 PORT=3000 BASAR_DATABASE=/var/lib/basarkasse/basarkasse.sqlite pnpm run start:selfhost
 ```
 
 Der Dienst benötigt Schreibrechte auf das Datenverzeichnis und sollte über systemd oder einen vergleichbaren Dienstmanager gestartet werden. Datenbankmigrationen werden beim Start in einer Transaktion angewendet. Bei Schemaänderungen werden neue Migrationen ergänzt, bestehende Migrationen nicht verändert.

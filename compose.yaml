@@ -11,5 +11,6 @@ services:
       PORT: 3000
       HOSTNAME: 0.0.0.0
       BASAR_DATABASE: /data/basarkasse.sqlite
+      BASAR_PUBLIC_ORIGIN: ${BASAR_PUBLIC_ORIGIN:-http://localhost:3000}
 volumes:
   basar-data:
