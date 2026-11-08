@@ -46,7 +46,10 @@ validate and reload Caddy, then stop the demo Compose service. Preserve the
 Never remove portal or certificate volumes. Updating the application rebuilds
 only this Compose project from a new exact commit and preserves its SQLite data.
 
-The original architecture review still documents further production work,
-including separation of training and real data, account lifecycle management,
-bounded read APIs, and the larger UI/service refactor. This demo deployment does
-not claim approval for handling real money.
+See [production readiness](../docs/production-readiness.md), the
+[architecture](../docs/architecture/overview.md),
+[recorded tests](../docs/testing/results-2026-11-08.md) and the
+[backup/restore runbook](../docs/operations/deployment.md) for the current
+requirements and evidence. This demo deployment does not claim approval for
+handling real money. Do not load-test its shared evaluation database; use the
+disposable local test harness or a separate isolated staging instance.
