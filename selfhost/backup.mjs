@@ -1,0 +1,5 @@
+import {DatabaseSync,backup} from 'node:sqlite';
+import {resolve,dirname} from 'node:path';
+import {mkdirSync,existsSync} from 'node:fs';
+export async function backupDatabase(source,destination){const input=resolve(source),output=resolve(destination);if(input===output)throw new Error('Sicherung und Quelldatenbank müssen verschieden sein.');if(!existsSync(input))throw new Error('Quelldatenbank wurde nicht gefunden.');if(existsSync(output))throw new Error('Die Sicherungsdatei existiert bereits. Bitte einen neuen Dateinamen verwenden.');mkdirSync(dirname(output),{recursive:true});const db=new DatabaseSync(input,{readOnly:true});try{await backup(db,output)}finally{db.close()}return output}
+if(process.argv[1]&&resolve(process.argv[1])===new URL(import.meta.url).pathname){if(!process.argv[2])throw new Error('Bitte den Zieldateipfad angeben.');const output=await backupDatabase(process.env.BASAR_DATABASE||'data/basarkasse.sqlite',process.argv[2]);console.log('Konsistente Datenbanksicherung erstellt: '+output)}
