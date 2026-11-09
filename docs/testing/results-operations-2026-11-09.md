@@ -12,7 +12,7 @@ only; this is not release approval for real money.
 - 38 browser tests passed in 38.2 seconds: 19 scenarios per Chromium/Android-tablet
   and WebKit/iPad layout, including full-event search/export with 50-row paging,
   manager-only dashboard and loss of a previously green health connection.
-- The short soak harness check independently reconciled 78 new sales, 13 duplicate
+- The short soak harness check independently reconciled 72 new sales, 13 duplicate
   replays, 125 seller payouts, six exact till closures, restart replay and restored
   epoch/write-pause checks. That ten-second harness check is not a duration test.
 
