@@ -14,12 +14,12 @@ const lockFd=openSync(lock,'wx',0o600);writeFileSync(lockFd,String(process.pid))
 const args=['-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','-o','ServerAliveInterval=10','-o','ServerAliveCountMax=2','-i',config.identity,config.host];
 let partial;
 try {
-  const manifest=JSON.parse(execFileSync('/usr/bin/ssh',[...args,'cat '+config.remoteRoot+'/backups/latest.json'],{encoding:'utf8',timeout:30000,maxBuffer:4096}));
+  const manifest=JSON.parse(execFileSync('/usr/bin/ssh',[...args,'sudo cat -- '+config.remoteRoot+'/backups/latest.json'],{encoding:'utf8',timeout:30000,maxBuffer:4096}));
   if(!backupName.test(manifest.name)||!/^[a-f0-9]{64}$/.test(manifest.sha256)||!Number.isSafeInteger(manifest.bytes)||manifest.bytes<1)throw new Error('Invalid backup manifest.');
   const output=join(directory,manifest.name);
   if(!existsSync(output)) {
     partial=output+'.partial-'+crypto.randomUUID();
-    const process=spawn('/usr/bin/ssh',[...args,'cat '+config.remoteRoot+'/backups/'+manifest.name],{stdio:['ignore','pipe','pipe']});
+    const process=spawn('/usr/bin/ssh',[...args,'sudo cat -- '+config.remoteRoot+'/backups/'+manifest.name],{stdio:['ignore','pipe','pipe']});
     let stderr='';process.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-2000);});
     const exited=new Promise((resolve,reject)=>{process.once('error',reject);process.once('exit',code=>code===0?resolve():reject(new Error('SSH backup transfer failed: '+stderr)));});
     await Promise.all([pipeline(process.stdout,createWriteStream(partial,{flags:'wx',mode:0o600})),exited]);
