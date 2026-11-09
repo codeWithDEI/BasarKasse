@@ -38,4 +38,8 @@ jobs:
       - run: pnpm run build:selfhost
       - name: Isolated six-session HTTP and persistence check
         run: pnpm run test:load
+      - name: Install recovery test browsers
+        run: pnpm exec playwright install --with-deps chromium webkit
+      - name: Browser interruption and recovery checks
+        run: pnpm run test:recovery
       - run: pnpm run build

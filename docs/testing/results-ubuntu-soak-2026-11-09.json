@@ -1,0 +1,70 @@
+{
+  "status": "passed",
+  "startedAt": "2026-11-09T14:26:48.521Z",
+  "workload": {
+    "seconds": 3600,
+    "seededSales": 10000,
+    "primaryClients": 6,
+    "reserveClients": 12,
+    "realTills": 6,
+    "cadenceMs": 10000,
+    "itemsPerSale": 5
+  },
+  "runtime": {
+    "node": "v24.22.2",
+    "sqlite": "3.53.4",
+    "platform": "linux",
+    "revision": "4548c8abc70e5e48cf4874030630f9a362be869e",
+    "cpu.max": "100000 100000",
+    "memory.max": "805306368"
+  },
+  "initialSnapshotBytes": 91181,
+  "finishedAt": "2026-11-09T15:27:16.879Z",
+  "results": {
+    "statuses": {
+      "200": 2706
+    },
+    "measuredSeconds": 3624,
+    "newSales": 2706,
+    "phaseSixSales": 1625,
+    "phaseTwelveSales": 1081,
+    "persistedSales": 12706,
+    "duplicateReplays": 277,
+    "voids": 29,
+    "movements": 238,
+    "payoutCount": 150,
+    "payoutCents": 5429947,
+    "postMs": {
+      "p50": 153.9,
+      "p95": 983.4,
+      "p99": 1127.9,
+      "max": 1316
+    },
+    "refreshP95Ms": 670,
+    "finalSnapshotBytes": 105938,
+    "integrity": "ok",
+    "restartReplay": true,
+    "restorePaused": true,
+    "oldTabletFence": true,
+    "independentTillBalances": {
+      "a2121d0d-cf33-415c-baba-7b3cd28da9be": 169607,
+      "a999881d-2985-4bfe-8200-c5d20aa747f3": 174178,
+      "8f4dd1d5-9afa-4f66-a8a7-78effdce154e": 178389,
+      "1ed0783d-6768-4cf9-90e8-19cfb97aa731": 182514,
+      "806733cd-3e8a-44dd-8d8b-8522f928916f": 186135,
+      "360447a6-0349-4de2-a045-c1a2926dea9b": 190790
+    }
+  },
+  "limitations": [
+    "Synthetic HTTP clients; no physical tablets, WLAN or HTTPS proxy",
+    "Client driver and app share the tested container CPU and memory budget",
+    "Six tills; six active clients followed by twelve reserve clients",
+    "Clock duration and response targets are evidence for this workload only; organizer forecast and physical acceptance remain open"
+  ],
+  "progress": {
+    "newSales": 2706,
+    "duplicateReplays": 277,
+    "voids": 29,
+    "updatedAt": "2026-11-09T15:27:16.883Z"
+  }
+}

@@ -49,7 +49,8 @@ pnpm run build
 
 For booking/concurrency/read performance changes, also run `pnpm run test:load`
 after the self-hosted build and attach the workload, runtime and results.
-For UI recovery changes, exercise real browsers and interruption scenarios from
+For UI recovery changes, run `pnpm exec playwright install chromium webkit` then
+`pnpm run test:recovery` after the self-hosted build, and exercise real devices and interruption scenarios from
 [the testing guide](docs/testing/README.md). API tests alone are insufficient.
 Documentation-only changes need link/command review; re-running expensive builds
 is unnecessary if no executable files or configuration changed.

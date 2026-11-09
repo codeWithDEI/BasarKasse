@@ -53,3 +53,10 @@ See [production readiness](../docs/production-readiness.md), the
 requirements and evidence. This demo deployment does not claim approval for
 handling real money. Do not load-test its shared evaluation database; use the
 disposable local test harness or a separate isolated staging instance.
+
+
+The operations installation also sets `BASAR_REVISION` and mounts the private
+host status directory read-only at `/ops-state`. Install the backup service and
+Mac puller from [the operations guide](../docs/operations/monitoring-and-backups.md)
+before expecting a green health page at `/basarkasse/health`. Source database
+backups and private monitoring files are never served as web assets.

@@ -7,13 +7,23 @@ import {build} from 'vite';
 import {openDatabase} from '../selfhost/sqlite.mjs';
 const tmp=mkdtempSync(join(tmpdir(),'basar-test-'));
 await build({configFile:false,logLevel:'error',build:{lib:{entry:resolve('lib/basar/service.ts'),formats:['es'],fileName:()=> 'service.mjs'},outDir:tmp,emptyOutDir:false,minify:false}});
-const {bootstrap,mutate,readState,login,auth}=await import(join(tmp,'service.mjs'));
+const {bootstrap,mutate,readState,readRegisterState,login,auth}=await import(join(tmp,'service.mjs'));
 const db=openDatabase(':memory:');globalThis.__basarDB=db;for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())db.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));await bootstrap();
 const manager={id:'demo-leitung',name:'Kassenleitung',role:'manager'},cashier={id:'demo-kasse',name:'Kassiererin',role:'cashier'};
 const eventId='demo-fruehjahr';const cmd=(action,p={},user=manager)=>mutate(action,{operationId:crypto.randomUUID(),eventId,...p},user);
 let tillId;
 after(()=>{db.close();rmSync(tmp,{recursive:true,force:true})});
 test('PIN-Anmeldung erzeugt eine geschützte Sitzung',async()=>{const r=new Request('https://example.test');await assert.rejects(()=>login(manager.id,'0000',r),/PIN/);const token=await login(manager.id,'1234',r);assert.equal((await auth(new Request('https://example.test',{headers:{cookie:'basar_session='+token}}))).role,'manager')});
+test('sessions survive inactivity for the shift, expire at twelve hours, and still reject disabled accounts',async t=>{
+ const request=new Request('https://example.test'),issuedAt=Date.now();
+ const clock=t.mock.method(Date,'now',()=>issuedAt);
+ const token=await login(cashier.id,'1234',request),authenticated=new Request(request,{headers:{cookie:'basar_session='+token}});
+ try {
+  for(const elapsed of [5*60000,11*3600000+59*60000]){clock.mock.mockImplementation(()=>issuedAt+elapsed);assert.equal((await auth(authenticated)).id,cashier.id);}
+  clock.mock.mockImplementation(()=>issuedAt+12*3600000);assert.equal(await auth(authenticated),null);
+  clock.mock.mockImplementation(()=>issuedAt+60000);db.sqlite.prepare('UPDATE staff SET disabled=1 WHERE id=?').run(cashier.id);assert.equal(await auth(authenticated),null);
+ } finally {db.sqlite.prepare('UPDATE staff SET disabled=0 WHERE id=?').run(cashier.id);clock.mock.restore();}
+});
 test('Die Kassenleitung kann eine Kasse mit Wechselgeld öffnen',async()=>{const result=await cmd('openTill',{number:1,opening:10000});tillId=result.tillId;assert.equal((await readState(eventId,manager)).tills[0].opening,10000);await assert.rejects(()=>cmd('openTill',{number:1,opening:10000}),/bereits geöffnet/)});
 test('Identischer Verkauf wird auch bei gleichzeitigem Senden genau einmal gebucht',async()=>{const p={operationId:crypto.randomUUID(),eventId,tillId,items:[{id:crypto.randomUUID(),seller:42,price:1000},{id:crypto.randomUUID(),seller:7,price:250}],received:2000};const r=await Promise.all([mutate('sale',p,cashier),mutate('sale',p,cashier)]);assert.equal(r[0].saleId,r[1].saleId);assert.equal(r[0].change,750);const state=await readState(eventId,manager);assert.equal(state.sales.length,1);assert.equal(state.sales[0].total,1250)});
 test('Zwei verschiedene parallele Verkäufe bleiben beide erhalten',async()=>{await Promise.all([cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:1,price:100}],received:100},cashier),cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:2,price:200}],received:200},cashier)]);const s=await readState(eventId,manager);assert.equal(s.sales.length,3);assert.equal(new Set(s.sales.map(s=>s.number)).size,3)});
@@ -65,4 +75,92 @@ test('Ein geänderter Client-IP-Header umgeht die kontobezogene Anmeldesperre ni
  const id=crypto.randomUUID();await cmd('addStaff',{operationId:id,name:'Loginbegrenzung Test',pin:'5826',role:'cashier'});
  for(let n=0;n<10;n++)await assert.rejects(()=>login(id,'0000',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.10'}})),/PIN/);
  await assert.rejects(()=>login(id,'5826',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.11'}})),e=>e.status===429);
+});
+
+test('operation lookup verifies command contents, actor, event and action',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Recovery identity',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation:50,received:1000};
+ assert.equal((await operationStatus('sale',p,cashier)).state,'not_found');
+ const first=await mutate('sale',p,cashier);
+ assert.deepEqual((await operationStatus('sale',p,cashier)).result,first);
+ for(const changed of [{...p,received:2000},{...p,donation:100},{...p,eventId:'demo-fruehjahr'}])await assert.rejects(()=>mutate('sale',changed,cashier),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>operationStatus('sale',p,manager),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>operationStatus('void',p,cashier),e=>e.code==='OPERATION_MISMATCH');
+ assert.equal((await readState(id,manager)).sales.length,1);
+});
+test('a recorded rejection cannot later turn into a successful sale under the same ID',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Durable rejection',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:100};
+ await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ assert.equal((await operationStatus('sale',p,cashier)).state,'rejected');
+ await assert.rejects(()=>mutate('sale',{...p,received:1000},cashier),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ assert.equal((await readState(id,manager)).sales.length,0);
+});
+test('legacy sale replay compares the original receipt when no request hash exists',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Legacy recovery',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
+ const result=await mutate('sale',p,cashier);db.sqlite.prepare('UPDATE operations SET request_hash=NULL WHERE id=?').run(p.operationId);
+ assert.deepEqual((await operationStatus('sale',p,cashier)).result,result);
+ await assert.rejects(()=>operationStatus('sale',{...p,received:2000},cashier),e=>e.code==='OPERATION_MISMATCH');
+});
+test('sale replay racing end-of-sales has one durable outcome and no partial booking',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Phase and reply race',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
+ await Promise.allSettled([cmd('eventStatus',{eventId:id,status:'settlement'}),...Array.from({length:6},()=>mutate('sale',p,cashier))]);
+ const outcome=await operationStatus('sale',p,cashier);assert.notEqual(outcome.state,'not_found');
+ const s=await readState(id,manager);assert.equal(s.sales.length,outcome.state==='committed'?1:0);
+ assert.equal(db.sqlite.prepare('SELECT count(*) n FROM operations WHERE id=?').get(p.operationId).n,1);
+ if(outcome.state==='committed')assert.deepEqual(await mutate('sale',p,cashier),outcome.result);
+ else await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+});
+
+test('the recovery migration preserves pre-upgrade operation results',()=>{
+ const old=openDatabase(':memory:');const files=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
+ for(const file of files.slice(0,2))old.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+ old.sqlite.prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at) VALUES(?,?,?,?,?,?)').run('legacy-operation','legacy-event','legacy-staff','sale','{"saleId":"legacy-sale","number":1}','2026-11-08');
+ for(const file of files.slice(2))old.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+ const row=old.sqlite.prepare('SELECT * FROM operations').get();assert.equal(row.request_hash,null);assert.equal(row.outcome,'committed');assert.equal(JSON.parse(row.result).saleId,'legacy-sale');old.close();
+});
+test('invalid event creation has a durable rejected outcome so the form can be corrected safely',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const p={operationId:crypto.randomUUID(),eventId,name:'X',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:6};
+ await assert.rejects(()=>mutate('createEvent',p,manager),e=>e.recorded===true);
+ assert.equal((await operationStatus('createEvent',p,manager)).state,'rejected');
+ assert.equal(db.sqlite.prepare('SELECT count(*) n FROM events WHERE id=?').get(p.operationId).n,0);
+});
+
+test('compact register pages retain whole-event money and sellers while limiting history to fifty receipts',async()=>{
+ const id=(await cmd('createEvent',{name:'Paged ledger',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:1})).eventId;
+ const till=(await cmd('openTill',{eventId:id,number:1,opening:10000})).tillId;
+ for(let n=0;n<65;n++)await cmd('sale',{eventId:id,tillId:till,items:[{id:crypto.randomUUID(),seller:n%2+1,price:650}],donation:50,received:1000});
+ const full=await readState(id,manager),compact=await readRegisterState(id,manager),next=await readRegisterState(id,manager,{before:compact.salesPage.nextBefore});
+ assert.equal(compact.sales.length,50);assert.equal(next.sales.length,15);assert.equal(new Set([...compact.sales,...next.sales].map(s=>s.id)).size,65);
+ assert.equal(compact.summary.gross,42250);assert.equal(compact.summary.donations,3250);assert.equal(compact.summary.count,65);assert.equal(compact.summary.itemCount,65);assert.equal(compact.summary.tillBalances[till],55500);
+ assert.equal(compact.summary.sellers[0].gross,21450);assert.equal(compact.summary.sellers[0].commission,3218);assert.equal(compact.summary.sellers[1].gross,20800);
+ assert.equal(full.sales.length,65);assert.equal((await readRegisterState(id,manager,{search:'2'})).sales.every(s=>s.number.toString().includes('2')||s.items.some(i=>i.seller===2)),true);
+});
+test('SQLite rejects duplicate event receipt and simultaneously open till numbers independently of application validation',async()=>{
+ const id=(await cmd('createEvent',{name:'Constraint ledger',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:1})).eventId;
+ const till=(await cmd('openTill',{eventId:id,number:1,opening:10000})).tillId;
+ await cmd('sale',{eventId:id,tillId:till,items:[{id:crypto.randomUUID(),seller:1,price:100}],received:100});
+ assert.throws(()=>db.sqlite.prepare('INSERT INTO sales SELECT ?,event_id,till_id,staff_id,staff_name,number,items,total,received,created_at,voided_at,voided_by,void_reason,donation FROM sales WHERE event_id=?').run(crypto.randomUUID(),id),/UNIQUE/);
+ assert.throws(()=>db.sqlite.prepare('INSERT INTO till_sessions SELECT ?,event_id,number,opening,opened_at,opened_by,closed_at,closed_by,counted,expected,note FROM till_sessions WHERE id=?').run(crypto.randomUUID(),till),/UNIQUE/);
+});
+test('restored databases block all writes until reconciliation and then reject both legacy and explicit old tablet epochs',async()=>{
+ const state=db.sqlite.prepare('SELECT * FROM instance_state WHERE id=1').get();
+ try {
+  db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run('restored-fixture');
+  await assert.rejects(()=>cmd('openTill',{number:1,opening:100}),e=>e.code==='WRITE_PAUSED'&&!e.recorded);
+  db.sqlite.prepare('UPDATE instance_state SET writes_paused=0 WHERE id=1').run();
+  for(const instanceEpoch of [undefined,'initial'])await assert.rejects(()=>cmd('openTill',{number:1,opening:100,instanceEpoch}),e=>e.code==='RESTORE_REVIEW_REQUIRED'&&!e.recorded);
+ } finally {db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=? WHERE id=1').run(state.epoch,state.writes_paused);}
 });

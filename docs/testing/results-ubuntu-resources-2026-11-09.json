@@ -1,0 +1,25 @@
+{
+  "source": "Read-only host sampling of the isolated validation container cgroup",
+  "sampleCount": 59,
+  "firstSampleAt": "2026-11-09T14:57:59.048568+00:00",
+  "lastSampleAt": "2026-11-09T15:27:00.115698+00:00",
+  "maximumObservedLifetimeMemoryPeakBytes": 400539648,
+  "maximumObservedCurrentMemoryBytes": 394481664,
+  "memoryLimitBytes": 805306368,
+  "lastObservedCpuStat": {
+    "usage_usec": 393690888,
+    "user_usec": 347536316,
+    "system_usec": 46154571,
+    "core_sched.force_idle_usec": 0,
+    "nr_periods": 10205,
+    "nr_throttled": 1718,
+    "throttled_usec": 7030041,
+    "nr_bursts": 0,
+    "burst_usec": 0
+  },
+  "limitations": [
+    "Sampling began partway through the workload; memory.peak is the kernel cgroup lifetime peak at each sample",
+    "The last sample precedes final shutdown; this is a maximum observed peak, not a guarantee about every final instant",
+    "The driver and app share the same budget; these figures are not host-wide portal resource use"
+  ]
+}

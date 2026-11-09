@@ -8,7 +8,10 @@ There is no supported production provisioning mode yet.
 ## Current controls
 
 - Server-side manager checks for privileged commands; PIN hashes use salted
-  PBKDF2-SHA256, and sessions expire after 12 hours.
+  PBKDF2-SHA256, and sessions expire 12 hours after login, with no shorter idle
+  timeout. Tablet locking and Wi-Fi loss do not log out a valid session. The
+  browser remembers a staff ID for PIN re-entry; this is not an authentication
+  credential. Pending commands require their original actor.
 - HttpOnly, SameSite=Strict session cookie; Secure when the configured public
   origin is HTTPS. Cookie path follows the build-time application base path.
 - POST requires JSON and the expected Origin. Set `BASAR_PUBLIC_ORIGIN` behind
@@ -24,8 +27,10 @@ suspension, session revocation and a recovery procedure for a locked-out manager
 Define cashier read permissions: current authenticated snapshots expose all event
 sales, payouts, movements and recent audit entries, including to cashiers.
 Unauthenticated snapshots expose event metadata and active staff names.
-Do not put secrets such as a new staff PIN in persistent pending-command storage.
-Resolve error classification and client recovery gaps described in
+New staff PINs are excluded from browser pending storage and request fingerprints.
+Legacy unresolved staff commands require private technical review during upgrade.
+Financial commands now retain their ID through unknown outcomes and session expiry;
+actual device/storage and venue acceptance remain required. See
 [transactions](docs/architecture/transactions.md).
 
 Review dependencies for each release. The 2026-11-08 review after the demo fixes

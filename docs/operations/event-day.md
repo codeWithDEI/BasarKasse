@@ -25,6 +25,13 @@ pending work before changing users/events. Two people count and record each
 opening float. Open each till once; verify six distinct open till sessions and
 the correct balances centrally. Record opening counts outside the application.
 
+Keep a manager-authenticated [health dashboard](monitoring-and-backups.md) visible
+on a powered monitor. Keep the backup Mac signed in, awake and connected; confirm
+its latest verified copy before opening and after the final close.
+
+Use the [register recovery procedure](register-recovery.md) for screen locking,
+Wi-Fi loss, expired sessions and the required physical-device rehearsal.
+
 ## During sales
 
 Confirm the sale and change on screen before handing over the completed purchase.

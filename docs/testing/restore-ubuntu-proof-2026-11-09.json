@@ -1,0 +1,16 @@
+{
+  "source": "Isolated Ubuntu restore from protected synthetic evaluation backup; active volume not replaced",
+  "writesPaused": true,
+  "integrity": "ok",
+  "restoredCounts": {
+    "events": 3,
+    "sales": 5,
+    "till_sessions": 3,
+    "payouts": 1,
+    "movements": 0,
+    "operations": 14,
+    "audit": 15
+  },
+  "epochAssigned": true,
+  "liveDatabaseReplaced": false
+}
