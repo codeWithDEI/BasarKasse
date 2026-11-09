@@ -7,7 +7,7 @@ The interface is German. Project documentation and contribution guidance are Eng
 **Status: protected evaluation / training only. Do not use this release to handle
 real event money.** Six tills are a design goal, not an approved operating capacity.
 See the [production readiness gates](docs/production-readiness.md) and
-[measured test results](docs/testing/results-2026-11-09.md) before planning a live event.
+[measured test results](docs/testing/results-operations-2026-11-09.md) before planning a live event.
 
 ## What it does
 
@@ -18,6 +18,10 @@ See the [production readiness gates](docs/production-readiness.md) and
 - Integer-cent accounting; commission rounded once per seller, excluding donations.
 - Full-sale voids, deposits, withdrawals, seller payouts and counted till closure.
 - Central persistence, operation IDs for replay protection, atomic booking batches.
+- Indexed command reads, database-enforced receipt/open-till uniqueness and paged
+  sale history with whole-event totals.
+- Protected operational dashboard, verified scheduled backups and Mac off-host
+  copies; restored databases fence old tablet commands until reconciliation.
 - Seller statements, CSV, browser printing and event JSON exports.
 - Atomic local drafts, pending commands and recovered receipts survive reloads;
   wake/reconnect reconciles the original operation. **This is not offline checkout.**
@@ -82,6 +86,10 @@ Browser interruption tests run with `pnpm exec playwright install chromium webki
 and `pnpm run test:recovery` after the self-hosted build. They own a separate
 temporary server/database and emulate Android/iPad layouts.
 
+For a disposable longer test with six active clients and twelve as a final reserve
+phase, run `pnpm run test:soak` (one hour, 10,000 historical sales by default).
+Use the documented isolated container configuration; never target the demo DB.
+
 See [test methodology](docs/testing/README.md) for parameters and limitations.
 
 ## Deploy an evaluation
@@ -107,11 +115,13 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | [Contributing](CONTRIBUTING.md) | Setup, change workflow, review and validation |
 | [Architecture overview](docs/architecture/overview.md) | Components, deployment choices and boundaries |
 | [Domain and data model](docs/architecture/domain-model.md) | Money, event lifecycle, roles and schema |
+| [Queries and database invariants](docs/architecture/queries-and-invariants.md) | Indexed validation, bounded history and restore epochs |
 | [Transactions and recovery](docs/architecture/transactions.md) | Atomicity, concurrency, idempotency and failure cases |
 | [Architecture decisions](docs/architecture/decisions.md) | Existing decisions, trade-offs and proposed changes |
 | [Testing](docs/testing/README.md) | Reproducible checks and acceptance scenarios |
-| [Recorded results](docs/testing/results-2026-11-09.md) | What was actually measured and what was not |
+| [Recorded results](docs/testing/results-operations-2026-11-09.md) | What was actually measured and what was not |
 | [Deployment and recovery](docs/operations/deployment.md) | Configuration, migrations, backups and restore |
+| [Monitoring and backups](docs/operations/monitoring-and-backups.md) | Health dashboard, Ubuntu/Mac schedules and restore fencing |
 | [Register recovery](docs/operations/register-recovery.md) | Lock screen, Wi-Fi, same-person login and device rehearsal |
 | [Event-day runbook](docs/operations/event-day.md) | Rehearsal, opening, incident response and reconciliation |
 | [Production readiness](docs/production-readiness.md) | Prioritized work and release gates for real money |

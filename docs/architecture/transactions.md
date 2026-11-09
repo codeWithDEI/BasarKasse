@@ -15,7 +15,7 @@ controls below; actual tablet/venue acceptance and the other
    same event revision, as a `rejected` outcome with no financial/audit effect.
 5. All statements are guarded by `events.last_op = operationId`; the operation
    primary key prevents two outcomes for one ID. A failed batch rolls back.
-6. On contention, read fresh state and retry up to five internal attempts.
+6. On contention, read fresh state and retry up to twelve internal attempts with bounded randomized delay.
    Exhaustion returns `409 / CONCURRENT_WRITE`, not a recorded rejection.
 
 A stored rejection cannot later become a sale, even when another copy of the
@@ -105,8 +105,8 @@ SQL errors. Only an explicit recorded outcome can release a pending financial
 command. Browser storage is not an off-device backup or a power-loss durability
 guarantee. The adapter does not explicitly set SQLite `synchronous`.
 
-The full-event query cost, server contention envelope, disk/power failure,
-backup-restore cutover fencing and actual tablet OS suspension still need their
+The aggregate-query cost, server contention envelope, disk/power failure and
+actual tablet OS suspension still need their
 own acceptance evidence. The [historical six-way conflict](../testing/results-2026-11-08.md)
 remains relevant: extra asynchronous fingerprint work can change scheduling,
 not prove contention impossible. New results are recorded

@@ -97,3 +97,37 @@ evidence, not a real OS screen-lock or venue Wi-Fi certification. See
 These are release requirements tracked in [production readiness](../production-readiness.md),
 not features already covered by automated tests. Attach actual runtime, revision,
 workload, failure counts and independent ledger checks to every acceptance report.
+
+
+## Isolated Ubuntu soak
+
+`pnpm run test:soak` creates its own database and loopback server, seeds 10,000
+receipts/items plus operation/audit history, creates twelve individual synthetic
+cashiers sharing six tills, and runs for one hour. Six clients operate for the
+first 45 minutes; twelve operate for the last 15. Each active client submits a
+five-item sale every ten seconds, reads the compact state, and replays every tenth
+command. The manager adds/removes cash every 30 seconds and voids a sale every two
+minutes. Online backup checks occur during load. Final seller payouts, till
+closures, stored receipt numbers, sale operation/audit counts and expected cash
+are checked against a separately maintained ledger; a restart replay and isolated
+restore/write-fence check finish the run.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SOAK_SECONDS` | `3600` | 10 to 14,400 seconds of measured traffic |
+| `SOAK_SEED_SALES` | `10000` | Historical receipts; maximum 100,000 |
+| `SOAK_CADENCE_MS` | `10000` | Per-client interval, minimum 100 ms |
+| `SOAK_REPORT` | unset | JSON progress/final report outside the temporary DB tree |
+
+The server run uses a separate no-network container, the exact built application
+image, one CPU and 768 MiB, with a private disk-backed scratch mount and report
+mount. The driver and application share that budget; the real portal remains
+running. No demo database/volume, external URL or exposed host port is accepted.
+Stop the test container to abort; only its disposable fixtures are affected.
+The report records the effective cgroup limits, revision and runtime.
+
+One hour is evidence for this chosen workload, not the proposed four-hour
+acceptance target, actual venue/Wi-Fi/tablet behavior or a guaranteed organizer
+forecast. Refreshes occur after sales rather than reproducing an independent
+12-second browser polling schedule. Recovery/browser fault injection is covered
+by the separate suite. Keep these limits explicit in release decisions.

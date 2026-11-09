@@ -33,7 +33,7 @@ second server will work as a supported high-availability arrangement.
 | --- | --- | --- |
 | Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts`, `lib/basar/login-form.tsx` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
 | HTTP | `app/api/basar/route.ts`, `lib/basar/http.ts` | Origin, session cookie, JSON validation, GET/POST responses |
-| Service | `lib/basar/service.ts`, `lib/basar/operations.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
+| Service | `lib/basar/service.ts`, `lib/basar/operations.ts`, `lib/basar/queries.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
 | Domain | `lib/basar/domain.ts` | Cent arithmetic, seller commission, till balance, item validation |
 | Schema | `db/schema.ts`, `drizzle/*.sql` | Drizzle definitions and applied SQL migrations |
 | Self-host runtime | `selfhost/*.mjs` | `node:sqlite`, migration startup, HTTP server, consistent backup |
@@ -53,10 +53,12 @@ single API route, receives a result, then requests a refreshed event snapshot.
 A successful booking response follows database commit. GET returns `no-store`.
 The UI also refreshes every 12 seconds; this is not push synchronization.
 
-Every authenticated snapshot currently loads **all event sales and item JSON**,
-tills, payouts, movements and the last 200 audit rows. The service does the same
-before each event mutation. As the bazaar grows, both booking work and network
-traffic grow. The local load test deliberately includes end-of-day history.
+The browser uses a compact snapshot with whole-event totals, at most 50 receipts
+and the latest 200 audit rows. Mutations read only their required rows/aggregates;
+a new sale does not load prior receipt items. Explicit exports and legacy clients
+can still request a full snapshot. Seller/till aggregates still grow with history;
+see [queries and invariants](queries-and-invariants.md) and the measured end-of-day
+workload before making capacity claims.
 
 ## Failure boundaries
 

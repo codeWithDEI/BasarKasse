@@ -10,7 +10,7 @@ import {restoreDatabase,releaseRestoredDatabase} from '../selfhost/restore.mjs';
 import {inspectDatabase,fileHash} from '../selfhost/verify.mjs';
 import {snapshot,acknowledge} from '../selfhost/ops-server.mjs';
 import {retainedBackups} from '../selfhost/retention.mjs';
-import {ageStatus} from '../selfhost/health.mjs';
+import {ageStatus,runtimeHealth} from '../selfhost/health.mjs';
 const tmp=mkdtempSync(join(tmpdir(),'basar-operations-'));after(()=>rmSync(tmp,{recursive:true,force:true}));
 function fixture(name) {
  const path=join(tmp,name+'.sqlite'),db=openDatabase(path);migrateDatabase(db);
@@ -25,10 +25,10 @@ test('online WAL backup contains a coherent receipt, is private, and never overw
  const digest=await fileHash(output);await assert.rejects(()=>backupDatabase(path,output),/exists/);assert.equal(await fileHash(output),digest);db.close();
 });
 test('restore migrates only a separate copy, starts paused, changes epoch and keeps financial evidence intact',async()=>{
- const {path,db}=fixture('restore');db.close();const hash=await fileHash(path),output=join(tmp,'restored.sqlite');
+ const {path,db}=fixture('restore');db.sqlite.exec("INSERT INTO staff(id,name,role,pin_hash) VALUES('restored-user','Synthetic','cashier','synthetic'); INSERT INTO sessions(token,staff_id,expires_at) VALUES('synthetic-old-session','restored-user',9999999999999);");db.close();const hash=await fileHash(path),output=join(tmp,'restored.sqlite');
  const restored=await restoreDatabase(path,output);assert.equal(restored.writesPaused,true);assert.notEqual(restored.epoch,'initial');assert.equal(await fileHash(path),hash);
  assert.throws(()=>releaseRestoredDatabase(output,'wrong-epoch'),/does not match/);releaseRestoredDatabase(output,restored.epoch);
- const copy=openDatabase(output);assert.equal(copy.sqlite.prepare('SELECT writes_paused FROM instance_state WHERE id=1').get().writes_paused,0);copy.close();
+ const copy=openDatabase(output);assert.equal(copy.sqlite.prepare('SELECT COUNT(*) n FROM sessions').get().n,0);assert.equal(copy.sqlite.prepare('SELECT writes_paused FROM instance_state WHERE id=1').get().writes_paused,0);copy.close();
  assert.deepEqual(inspectDatabase(output).ledger,inspectDatabase(path).ledger);
 });
 test('snapshots and Mac acknowledgements are independently hashed; forged acknowledgements cannot turn green',async()=>{
@@ -49,4 +49,14 @@ test('retention preserves recent and distinct hourly/daily restore points; stale
  const day=86400000,now=Date.parse('2026-11-09T12:00:00Z');
  const entries=Array.from({length:100},(_,i)=>({name:String(i),time:now-i*day}));const keep=retainedBackups(entries,{latest:2,hours:3,days:7});assert.equal(keep.size,7);assert.ok(keep.has('0'));assert.ok(keep.has('6'));assert.ok(!keep.has('7'));
  assert.equal(ageStatus(null,now).status,'critical');assert.equal(ageStatus(new Date(now-601000).toISOString(),now).status,'critical');assert.equal(ageStatus(new Date(now-400000).toISOString(),now).status,'warning');assert.equal(ageStatus(new Date(now-60000).toISOString(),now).status,'ok');
+});
+
+test('a failed snapshot is published as critical on the operational dashboard',async()=>{
+ const {path,db}=fixture('health-failure'),directory=join(tmp,'failed-backups'),state=join(tmp,'failed-state');
+ const oldDatabase=globalThis.__basarDB,oldPath=process.env.BASAR_DATABASE,oldState=process.env.BASAR_OPS_STATE;
+ try {
+  globalThis.__basarDB=db;process.env.BASAR_DATABASE=path;process.env.BASAR_OPS_STATE=state;
+  await assert.rejects(()=>snapshot(join(tmp,'missing.sqlite'),directory,state),/does not exist/);
+  const health=await runtimeHealth();assert.equal(health.status,'critical');assert.equal(health.checks.find(c=>c.id==='server-backup').status,'critical');assert.equal(health.checks.find(c=>c.id==='server-backup').detail,'Letzter Versuch fehlgeschlagen');
+ } finally {globalThis.__basarDB=oldDatabase;if(oldPath===undefined)delete process.env.BASAR_DATABASE;else process.env.BASAR_DATABASE=oldPath;if(oldState===undefined)delete process.env.BASAR_OPS_STATE;else process.env.BASAR_OPS_STATE=oldState;db.close();}
 });

@@ -7,7 +7,7 @@ import {migrateDatabase} from './migrations.mjs';
 export async function restoreDatabase(source,destination) {
   const original=inspectDatabase(source);await backupDatabase(source,destination);
   const db=openDatabase(destination),epoch=crypto.randomUUID();
-  try{migrateDatabase(db);db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run(epoch);db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');}finally{db.close();}
+  try{migrateDatabase(db);db.sqlite.exec('BEGIN IMMEDIATE');try{db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run(epoch);db.sqlite.exec('DELETE FROM sessions; DELETE FROM login_limits; COMMIT');}catch(error){db.sqlite.exec('ROLLBACK');throw error;}db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');}finally{db.close();}
   const restored=inspectDatabase(destination);
   if(JSON.stringify(original.counts)!==JSON.stringify(restored.counts)||JSON.stringify(original.ledger)!==JSON.stringify(restored.ledger))throw new Error('Restored financial evidence differs from the backup. Keep all tills blocked.');
   return {epoch,writesPaused:true,report:restored};

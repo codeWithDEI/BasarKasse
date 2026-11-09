@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-11-09T14:21:13.193Z",
+  "runtime": {
+    "node": "v22.23.2",
+    "sqlite": "3.53.4",
+    "platform": "darwin",
+    "arch": "x64",
+    "logicalCpus": 12,
+    "memoryBytes": 25769803776
+  },
+  "workload": {
+    "registers": 6,
+    "seededSales": 5000,
+    "itemsPerSale": 5,
+    "newSales": 600,
+    "duplicateReplays": 61,
+    "refreshAfterEachSale": true
+  },
+  "results": {
+    "statuses": {
+      "200": 600
+    },
+    "elapsedSeconds": 27.412,
+    "salesPerSecond": 21.9,
+    "postMs": {
+      "p50": 127.1,
+      "p95": 216.9,
+      "max": 245.9
+    },
+    "refreshMs": {
+      "p95": 232.1
+    },
+    "finalStateBytes": 3980687,
+    "persistedSales": 5600,
+    "ledgerCents": 2835500,
+    "restartReplay": true,
+    "integrityCheck": "ok"
+  },
+  "limitations": [
+    "Local single-process Next.js/SQLite, not a browser or D1 test",
+    "No production CPU/memory quota or reverse proxy",
+    "No Wi-Fi fault, power cut, disk-full or browser storage fault injection",
+    "Six sessions share the training cashier identity",
+    "Seed history bypasses API; measured new sales use HTTP"
+  ]
+}

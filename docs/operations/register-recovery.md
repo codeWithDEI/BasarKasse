@@ -121,4 +121,6 @@ apply that cleanup to an uncertain financial command.
 Do not downgrade the client during active sales: the old client cannot read v2
 state. A database restore can lose already acknowledged operations and needs the
 separate [blocked-device cutover procedure](deployment.md#restore-drill-and-incident-restore).
-Browser recovery alone does not make replay against an old backup safe.
+The new [restore epoch and write pause](monitoring-and-backups.md) block old
+commands after a restore; operators must still reconcile the missing interval.
+Browser recovery alone cannot reconstruct absent acknowledged receipts.

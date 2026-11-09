@@ -1,0 +1,21 @@
+{
+  "verifiedAt": "2026-11-09T14:45:53.422Z",
+  "source": "Verified off-host Mac copy of the protected synthetic evaluation database",
+  "sourceHashPreserved": true,
+  "restoredCounts": {
+    "events": 3,
+    "sales": 5,
+    "till_sessions": 3,
+    "payouts": 1,
+    "movements": 0,
+    "operations": 14,
+    "audit": 15
+  },
+  "integrity": "ok",
+  "startsPaused": true,
+  "unknownPendingBlockedBeforeReconciliation": "WRITE_PAUSED",
+  "oldAndLegacyPendingBlockedAfterReconciliation": "RESTORE_REVIEW_REQUIRED",
+  "currentEpochStatusLookup": "not_found",
+  "financialRowsUnchanged": true,
+  "liveDatabaseReplaced": false
+}
