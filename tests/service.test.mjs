@@ -14,6 +14,16 @@ const eventId='demo-fruehjahr';const cmd=(action,p={},user=manager)=>mutate(acti
 let tillId;
 after(()=>{db.close();rmSync(tmp,{recursive:true,force:true})});
 test('PIN-Anmeldung erzeugt eine geschützte Sitzung',async()=>{const r=new Request('https://example.test');await assert.rejects(()=>login(manager.id,'0000',r),/PIN/);const token=await login(manager.id,'1234',r);assert.equal((await auth(new Request('https://example.test',{headers:{cookie:'basar_session='+token}}))).role,'manager')});
+test('sessions survive inactivity for the shift, expire at twelve hours, and still reject disabled accounts',async t=>{
+ const request=new Request('https://example.test'),issuedAt=Date.now();
+ const clock=t.mock.method(Date,'now',()=>issuedAt);
+ const token=await login(cashier.id,'1234',request),authenticated=new Request(request,{headers:{cookie:'basar_session='+token}});
+ try {
+  for(const elapsed of [5*60000,11*3600000+59*60000]){clock.mock.mockImplementation(()=>issuedAt+elapsed);assert.equal((await auth(authenticated)).id,cashier.id);}
+  clock.mock.mockImplementation(()=>issuedAt+12*3600000);assert.equal(await auth(authenticated),null);
+  clock.mock.mockImplementation(()=>issuedAt+60000);db.sqlite.prepare('UPDATE staff SET disabled=1 WHERE id=?').run(cashier.id);assert.equal(await auth(authenticated),null);
+ } finally {db.sqlite.prepare('UPDATE staff SET disabled=0 WHERE id=?').run(cashier.id);clock.mock.restore();}
+});
 test('Die Kassenleitung kann eine Kasse mit Wechselgeld öffnen',async()=>{const result=await cmd('openTill',{number:1,opening:10000});tillId=result.tillId;assert.equal((await readState(eventId,manager)).tills[0].opening,10000);await assert.rejects(()=>cmd('openTill',{number:1,opening:10000}),/bereits geöffnet/)});
 test('Identischer Verkauf wird auch bei gleichzeitigem Senden genau einmal gebucht',async()=>{const p={operationId:crypto.randomUUID(),eventId,tillId,items:[{id:crypto.randomUUID(),seller:42,price:1000},{id:crypto.randomUUID(),seller:7,price:250}],received:2000};const r=await Promise.all([mutate('sale',p,cashier),mutate('sale',p,cashier)]);assert.equal(r[0].saleId,r[1].saleId);assert.equal(r[0].change,750);const state=await readState(eventId,manager);assert.equal(state.sales.length,1);assert.equal(state.sales[0].total,1250)});
 test('Zwei verschiedene parallele Verkäufe bleiben beide erhalten',async()=>{await Promise.all([cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:1,price:100}],received:100},cashier),cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:2,price:200}],received:200},cashier)]);const s=await readState(eventId,manager);assert.equal(s.sales.length,3);assert.equal(new Set(s.sales.map(s=>s.number)).size,3)});

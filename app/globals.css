@@ -18,3 +18,5 @@
 
 /* Keep the financial workflow inert while storage ownership or an outcome is unresolved. */
 .register-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+.login-person{display:flex;align-items:center;gap:14px;padding:16px;background:#f2f6ea;border:1px solid var(--border);border-radius:12px;margin-bottom:22px}.login-person>div{flex:1;min-width:0}.login-person strong{display:block;font-size:18px;color:#4b6340;overflow-wrap:anywhere}.login-person small{display:block;margin-top:4px;color:#69785c}.login-person .text-button{min-height:48px;padding:8px;font-size:13px}.modal .field>.login-pin{min-height:60px;font-size:24px;letter-spacing:5px}.modal .login-submit{min-height:56px;font-size:16px}.login-help{font-size:12px;line-height:1.7;color:#69785c;margin:14px 0 20px}.login-training{border-top:1px solid var(--border);padding-top:18px;margin-top:20px}.login-training summary{cursor:pointer;min-height:44px;font-size:13px;color:#69785c}.login-training .demo-login-buttons{margin-bottom:0}

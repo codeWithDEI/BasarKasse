@@ -7,11 +7,13 @@ The interface is German. Project documentation and contribution guidance are Eng
 **Status: protected evaluation / training only. Do not use this release to handle
 real event money.** Six tills are a design goal, not an approved operating capacity.
 See the [production readiness gates](docs/production-readiness.md) and
-[measured test results](docs/testing/results-2026-11-08.md) before planning a live event.
+[measured test results](docs/testing/results-2026-11-09.md) before planning a live event.
 
 ## What it does
 
 - Multiple events, numbered tills, personal PIN sessions and cashier/manager roles.
+- Twelve-hour sessions survive tablet sleep; remembered staff need only their PIN
+  to log back in. Pending work always requires its original person.
 - Manual baskets, cash received, change and optional donations through rounding up.
 - Integer-cent accounting; commission rounded once per seller, excluding donations.
 - Full-sale voids, deposits, withdrawals, seller payouts and counted till closure.
@@ -39,7 +41,8 @@ BASAR_PUBLIC_ORIGIN=http://127.0.0.1:3000 HOSTNAME=127.0.0.1 PORT=3000 BASAR_DAT
 ```
 
 Open [the local application](http://127.0.0.1:3000). Select **Anmelden & Kasse
-öffnen**, then **Übung als Kassenleitung** or **Übung als Kassiererin**. Both demo
+öffnen**, expand **Übungsrollen anzeigen**, then choose **Übung als Kassenleitung**
+or **Übung als Kassiererin**. Both demo
 accounts use PIN `1234`. They are intentionally public training credentials.
 
 A fresh database seeds an example event: 150 sellers, three tills and 15% commission.
@@ -107,7 +110,7 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | [Transactions and recovery](docs/architecture/transactions.md) | Atomicity, concurrency, idempotency and failure cases |
 | [Architecture decisions](docs/architecture/decisions.md) | Existing decisions, trade-offs and proposed changes |
 | [Testing](docs/testing/README.md) | Reproducible checks and acceptance scenarios |
-| [Recorded results](docs/testing/results-2026-11-08.md) | What was actually measured and what was not |
+| [Recorded results](docs/testing/results-2026-11-09.md) | What was actually measured and what was not |
 | [Deployment and recovery](docs/operations/deployment.md) | Configuration, migrations, backups and restore |
 | [Register recovery](docs/operations/register-recovery.md) | Lock screen, Wi-Fi, same-person login and device rehearsal |
 | [Event-day runbook](docs/operations/event-day.md) | Rehearsal, opening, incident response and reconciliation |

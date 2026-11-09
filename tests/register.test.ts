@@ -37,3 +37,9 @@ test('legacy pending sale wins over a stale previous receipt and draft',()=>{
  const s=storage();s.setItem('basar-device-v1',JSON.stringify({eventId:command.eventId}));s.setItem('basar-draft-v1',JSON.stringify({eventId:command.eventId,lastSale:receipt,items:[]}));s.setItem('basar-pending-v1',JSON.stringify(command));
  const migrated=loadRegister(s,key);assert.equal(migrated.lastSale,null);assert.deepEqual(migrated.items,command.items);assert.equal(migrated.received,'10.00');
 });
+
+test('existing v2 register records acquire only an empty remembered identity and retain all financial recovery evidence',()=>{
+ const s=storage();const record={...emptyRegister(),eventId:command.eventId,items:command.items,pending:command};
+ const {lastStaffId,...legacy}=record;s.setItem(key,JSON.stringify(legacy));
+ assert.deepEqual(loadRegister(s,key),{...legacy,lastStaffId:''});
+});

@@ -31,7 +31,7 @@ second server will work as a supported high-availability arrangement.
 
 | Layer | Files | Responsibility |
 | --- | --- | --- |
-| Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
+| Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts`, `lib/basar/login-form.tsx` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
 | HTTP | `app/api/basar/route.ts`, `lib/basar/http.ts` | Origin, session cookie, JSON validation, GET/POST responses |
 | Service | `lib/basar/service.ts`, `lib/basar/operations.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
 | Domain | `lib/basar/domain.ts` | Cent arithmetic, seller commission, till balance, item validation |

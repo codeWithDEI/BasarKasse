@@ -72,7 +72,10 @@ runner refuses to reuse an existing server. All data is disposable.
 
 The suite tests request/reply loss, reload/tab closure, session expiry, transient
 409/503, tab ownership, storage failures before/after commit, interrupted item
-entry and waking while an earlier reply remains suspended. Chromium uses an
+entry and waking while an earlier reply remains suspended. Login scenarios
+cover remembered staff, wrong PIN and retry, four-/eight-digit PINs, intentional
+person changes with a draft, valid-session wake-up and original-person recovery
+even when another account was last authenticated. Chromium uses an
 Android tablet layout; WebKit uses an iPad layout. This is engine/emulation
 evidence, not a real OS screen-lock or venue Wi-Fi certification. See
 [recorded recovery results](results-2026-11-09.md) and the

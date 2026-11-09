@@ -2,24 +2,24 @@ import type {Item} from './domain';
 export type PendingCommand = {action:string;operationId:string;eventId:string;staffId:string;[key:string]:any};
 export type SaleReceipt={saleId:string;number:number;total:number;donation:number;received:number;change:number;payable:number};
 export type RegisterRecord = {
-  version:2; revision:number; eventId:string; tillId:string; items:Item[];
+  version:2; revision:number; eventId:string; tillId:string; lastStaffId:string; items:Item[];
   received:string; roundTo:string; seller:string; price:string; editing:string|null;
   lastSale:SaleReceipt|null; pending:PendingCommand|null;
 };
-export const emptyRegister=():RegisterRecord=>({version:2,revision:0,eventId:'',tillId:'',items:[],received:'',roundTo:'',seller:'',price:'',editing:null,lastSale:null,pending:null});
+export const emptyRegister=():RegisterRecord=>({version:2,revision:0,eventId:'',tillId:'',lastStaffId:'',items:[],received:'',roundTo:'',seller:'',price:'',editing:null,lastSale:null,pending:null});
 export const registerKey=(basePath:string)=>'basar-register-v2:'+ (basePath||'/');
 type StoragePort=Pick<Storage,'getItem'|'setItem'>;
 function validate(record:RegisterRecord) {
   if(!record || record.version!==2 || !Number.isSafeInteger(record.revision) || record.revision<0 || !Array.isArray(record.items)) throw new Error('Der gespeicherte Kassenstand ist beschädigt. Bitte die Kassenleitung hinzuziehen; den Browser-Speicher nicht löschen.');
   if(record.items.length>300 || record.items.some(i=>!i || typeof i.id!=='string' || !Number.isInteger(i.seller) || !Number.isSafeInteger(i.price) || i.price<1)) throw new Error('Der gespeicherte Warenkorb ist beschädigt. Bitte die Kassenleitung hinzuziehen.');
-  for(const k of ['eventId','tillId','received','roundTo','seller','price'] as const) if(typeof record[k]!=='string') throw new Error('Der gespeicherte Kassenstand ist unvollständig. Bitte die Kassenleitung hinzuziehen.');
+  for(const k of ['eventId','tillId','lastStaffId','received','roundTo','seller','price'] as const) if(typeof record[k]!=='string') throw new Error('Der gespeicherte Kassenstand ist unvollständig. Bitte die Kassenleitung hinzuziehen.');
   if(record.pending && (!record.pending.operationId || !record.pending.action || !record.pending.staffId || !record.pending.eventId || record.pending.eventId!==record.eventId)) throw new Error('Der offene Vorgang ist unvollständig. Bitte die Kassenleitung hinzuziehen.');
   if(record.lastSale && record.items.length) throw new Error('Gespeicherter Beleg und Warenkorb widersprechen sich. Bitte die Kassenleitung hinzuziehen.');
   return record;
 }
 export function loadRegister(storage:StoragePort,key:string):RegisterRecord {
   const raw=storage.getItem(key);
-  if(raw!==null) return validate(JSON.parse(raw));
+  if(raw!==null) return validate({lastStaffId:'',...JSON.parse(raw)});
   const device=JSON.parse(storage.getItem('basar-device-v1')||'{}');
   const draft=JSON.parse(storage.getItem('basar-draft-v1')||'null');
   const pending=JSON.parse(storage.getItem('basar-pending-v1')||'null');

@@ -18,6 +18,40 @@ Drafts and entered cash/rounding survive reloads. A sale is submitted only after
 until a committed receipt or durable rejection is known. Returning to the app or
 reconnecting checks the original outcome automatically.
 
+## Low-friction shift login
+
+Sign in once at the start of a shift. Sessions have a fixed **twelve-hour** lifetime
+from login, with no shorter inactivity logout. Tablet lock, tab reload and Wi-Fi
+loss do not themselves end a valid session. A resumed page still verifies the
+session on the server. Expired, logged-out or disabled accounts cannot book.
+
+The register remembers only the last authenticated **staff ID** in its existing
+atomic browser record. Existing v2 records default this new field to empty;
+financial drafts, receipts and operation IDs remain intact. PINs and session tokens
+are never stored in this record. Authentication remains an HttpOnly cookie plus
+server-side session; knowing a remembered name does not grant access.
+
+When login is needed, tap **Erneut anmelden**, enter the PIN in the large numeric
+field and choose **Weiterarbeiten** (or press the keyboard's submit key). Incorrect
+PINs clear only the PIN field, show an error and keep focus ready to try again.
+Four to eight digits remain supported; choose individual four-digit cashier PINs
+for the rehearsal if that is the organizer's policy. Do not share a manager PIN.
+The existing account-based attempt limit remains enforced.
+
+Use **Andere Person** to change a remembered selection before login, or the profile
+button to change staff deliberately. An unsubmitted basket is preserved during a
+person change; the eventual sale is attributed to the person who submits it.
+Once a command has been sent, only its original person can reconcile it. If that
+person is unavailable, pause the till and involve the technical/cash lead.
+At the end of a shift use the profile button and **Abmelden**, and keep the tablet
+physically controlled. A locked tablet is not an application logout.
+
+The evaluation's outer HTTP Basic Auth is separate from this personal PIN flow.
+Provision its credentials once on each rehearsal tablet; test browser prompts
+with the actual proxy. Training shortcuts remain available under **Übungsrollen
+anzeigen** on an initial login, so this change does not close production-access
+gates or remove the protected evaluation requirement.
+
 ## If the tablet locks or Wi-Fi fails
 
 1. Keep the cash and purchase together until the outcome is known. Do not re-enter
@@ -25,8 +59,10 @@ reconnecting checks the original outcome automatically.
    while the first outcome is uncertain.
 2. Unlock the tablet and return to the same tab/browser. Reconnect to the network.
    The app checks the pending operation. If necessary use **Status prüfen**.
-3. If prompted, choose **Erneut anmelden** and use the **same person** as before
-   the interruption. Logging in as someone else cannot take over that operation.
+3. If prompted, choose **Erneut anmelden**. The original person is already shown;
+   enter their personal PIN and confirm. The result is checked automatically.
+   There is no person selector or demo shortcut while a command is pending.
+   Another account cannot take over that operation.
 4. A recovered **VERKAUF #… GESPEICHERT** receipt is the original sale, not a new
    payment. Give the displayed change once and select **Nächster Einkauf** only
    when the handover is complete.
@@ -53,8 +89,11 @@ For every device record model, OS, browser version, URL and result:
 - Disable Wi-Fi immediately after submission. Restore it, verify one receipt and
   exactly one sale centrally. Repeat several times; network timing is variable.
 - Close/reopen the tab with an uncertain operation and with a confirmed receipt.
-- Let a test session expire/revoke it technically; recover only after the original
-  person logs back in. Check that another account cannot take over.
+- Lock/unlock and reload with a valid session: no PIN prompt should appear.
+- Let a test session expire/revoke it technically; verify the original name is
+  already selected, enter a wrong PIN then the correct PIN, and recover one sale.
+  Check that another account cannot take over. Also rehearse deliberate staff
+  changes with an unsubmitted basket and four-/eight-digit PINs.
 - Open a second tab: it must wait. Close the first; the second must recover the
   current receipt/draft instead of a stale basket.
 - Repeat with all six physical registers and realistic end-of-day data, including

@@ -48,11 +48,12 @@ test('lost reply after server commit recovers the original receipt after reload 
 });
 
 test('request lost before server arrival survives closing the tab and resumes with the same ID',async({context,page})=>{
- const fixture=await setup(context,page);await basket(page);const ids:string[]=[];
- await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(ids.length===1)return route.abort('failed');}await route.continue();});
+ const fixture=await setup(context,page);await basket(page);const ids:string[]=[];let reopened=false;
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(!reopened)return route.abort('failed');}await route.continue();});
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
- await page.close();const reopened=await context.newPage();await reopened.goto(origin+basePath+'/');await receipt(reopened);
- expect(new Set(ids).size).toBe(1);expect(ids.length).toBe(2);expect((await fixture.state()).sales).toHaveLength(1);
+ await page.close();reopened=true;const restored=await context.newPage();await restored.goto(origin+basePath+'/');await receipt(restored);
+ expect(new Set(ids).size).toBe(1);expect(ids.length).toBeGreaterThanOrEqual(2); // Wake events may replay transport; the operation and financial effect stay unique.
+ expect((await fixture.state()).sales).toHaveLength(1);
 });
 
 test('offline and expired session retain pending work until the same person logs in again',async({context,page})=>{
@@ -60,7 +61,9 @@ test('offline and expired session retain pending work until the same person logs
  await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(first){first=false;return route.abort('failed');}}await route.continue();});
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
  await context.setOffline(true);await context.clearCookies();await pending(page);await context.setOffline(false);await page.reload();
- await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();await page.getByRole('button',{name:'Übung als Kassenleitung'}).click();
+ await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();
+ await expect(page.locator('.login-person')).toContainText('Kassenleitung');await expect(page.getByRole('combobox',{name:'Name',exact:true})).toHaveCount(0);
+ await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();
  await receipt(page);expect(new Set(ids).size).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
 });
 
@@ -117,4 +120,54 @@ test('waking while a committed sale reply is still suspended retrieves the recei
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await receipt(page);
   expect(posts).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
  } finally {release();}
+});
+
+
+test('a valid session survives reload and wake without another login, retaining the basket',async({context,page})=>{
+ await setup(context,page);await basket(page);let logins=0;
+ page.on('request',request=>{if(request.method()==='POST'&&['login','demo'].includes(request.postDataJSON()?.action))logins++;});
+ await page.reload();await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
+ await expect(page.locator('.profile')).toContainText('Kassenleitung');
+ await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
+ await expect(page.getByRole('button',{name:'Verkauf abschließen'})).toBeEnabled();
+ expect(logins).toBe(0);expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).lastStaffId,key)).toBe('demo-leitung');
+});
+
+test('remembered personal login needs only a PIN; a wrong PIN preserves the draft and never enters storage',async({context,page})=>{
+ const fixture=await setup(context,page),staffId=crypto.randomUUID();
+ await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Recovery cashier '+staffId,role:'cashier',pin:'5826'});
+ await fixture.post('login',{staffId,pin:'5826'});await page.reload();await basket(page);
+ await context.clearCookies();await page.reload();await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();
+ await expect(page.locator('.login-person')).toContainText('Recovery cashier');
+ const pin=page.getByLabel('Persönliche PIN',{exact:true});await expect(pin).toBeFocused();
+ await pin.fill('0000');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();
+ await expect(page.locator('dialog').getByRole('alert')).toContainText('Name oder PIN stimmt nicht.');await expect(pin).toHaveValue('');await expect(pin).toBeFocused();
+ await pin.fill('5826');await pin.press('Enter');await expect(page.locator('dialog')).not.toBeVisible();
+ await expect(page.locator('.profile')).toContainText('Recovery cashier');await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
+ const storage=await page.evaluate(()=>JSON.stringify({...localStorage}));expect(storage).not.toContain('5826');expect(storage).not.toContain('basar_session');
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);expect((await fixture.state()).sales[0].staff_id).toBe(staffId);
+});
+
+test('pending recovery selects the original cashier even when another person is remembered',async({context,page})=>{
+ const fixture=await setup(context,page),staffId=crypto.randomUUID();
+ await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Original cashier '+staffId,role:'cashier',pin:'71925826'});
+ await fixture.post('login',{staffId,pin:'71925826'});await page.reload();await basket(page);let blocked=true;const ids:string[]=[];
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(blocked)return route.abort('failed');}await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
+ await fixture.post('demo',{staffId:'demo-leitung'});await page.reload();
+ await expect.poll(()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).lastStaffId,key)).toBe('demo-leitung');
+ await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();await expect(page.locator('.login-person')).toContainText('Original cashier');
+ await expect(page.getByRole('button',{name:'Andere Person',exact:true})).toHaveCount(0);await expect(page.getByText('Übungsrollen anzeigen')).toHaveCount(0);
+ await expect(page.getByRole('combobox',{name:'Name',exact:true})).toHaveCount(0);blocked=false;
+ await page.getByLabel('Persönliche PIN',{exact:true}).fill('71925826');await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+ await receipt(page);expect(new Set(ids).size).toBe(1);const sales=(await fixture.state()).sales;expect(sales).toHaveLength(1);expect(sales[0].staff_id).toBe(staffId);
+});
+
+test('a deliberate person switch uses the new PIN and preserves an unsubmitted basket',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);await page.locator('.profile').click();
+ await page.getByRole('combobox',{name:'Name',exact:true}).selectOption('demo-kasse');
+ await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+ await expect(page.locator('dialog')).not.toBeVisible();await expect(page.locator('.profile')).toContainText('Kassiererin');
+ await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);expect((await fixture.state()).sales[0].staff_id).toBe('demo-kasse');
 });
