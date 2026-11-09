@@ -46,3 +46,7 @@ yarn-error.log*
 
 # Self-hosted runtime data
 /data/
+
+# Browser test artifacts (synthetic test data only)
+/test-results/
+/playwright-report/

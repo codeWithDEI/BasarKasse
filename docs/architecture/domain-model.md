@@ -78,7 +78,7 @@ erDiagram
 | `movements` | Signed cash movement and reason |
 | `staff`, `sessions`, `login_limits` | PIN hash/role, expiring session, account attempt counter |
 | `audit` | Human-readable activity history, not a tamper-proof ledger |
-| `operations` | Unique operation ID, event/staff/action scope and stored result |
+| `operations` | Unique operation ID, scope/fingerprint, committed or rejected outcome and stored result |
 | `__basar_migrations` | Self-hosted applied-migration filenames |
 
 Sales store stable staff ID and display name. Several other records store only

@@ -31,9 +31,9 @@ second server will work as a supported high-availability arrangement.
 
 | Layer | Files | Responsibility |
 | --- | --- | --- |
-| Browser | `app/page.tsx`, `app/globals.css` | Basket entry, draft/pending state, dialogs, reports, 12-second polling |
+| Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
 | HTTP | `app/api/basar/route.ts`, `lib/basar/http.ts` | Origin, session cookie, JSON validation, GET/POST responses |
-| Service | `lib/basar/service.ts` | Bootstrap, authentication, authorization, reads, commands, optimistic transaction protocol |
+| Service | `lib/basar/service.ts`, `lib/basar/operations.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
 | Domain | `lib/basar/domain.ts` | Cent arithmetic, seller commission, till balance, item validation |
 | Schema | `db/schema.ts`, `drizzle/*.sql` | Drizzle definitions and applied SQL migrations |
 | Self-host runtime | `selfhost/*.mjs` | `node:sqlite`, migration startup, HTTP server, consistent backup |
@@ -47,7 +47,8 @@ modular enough for independent teams to change financial workflows casually.
 
 ## Data flow
 
-A browser persists its draft and command ID locally, sends a command to the
+A browser atomically persists its draft and immutable command ID locally, checks
+the original operation outcome on recovery, and sends that command to the
 single API route, receives a result, then requests a refreshed event snapshot.
 A successful booking response follows database commit. GET returns `no-store`.
 The UI also refreshes every 12 seconds; this is not push synchronization.

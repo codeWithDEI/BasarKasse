@@ -7,3 +7,5 @@ dist
 data
 outputs
 .env*
+test-results
+playwright-report

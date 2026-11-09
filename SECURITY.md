@@ -24,8 +24,10 @@ suspension, session revocation and a recovery procedure for a locked-out manager
 Define cashier read permissions: current authenticated snapshots expose all event
 sales, payouts, movements and recent audit entries, including to cashiers.
 Unauthenticated snapshots expose event metadata and active staff names.
-Do not put secrets such as a new staff PIN in persistent pending-command storage.
-Resolve error classification and client recovery gaps described in
+New staff PINs are excluded from browser pending storage and request fingerprints.
+Legacy unresolved staff commands require private technical review during upgrade.
+Financial commands now retain their ID through unknown outcomes and session expiry;
+actual device/storage and venue acceptance remain required. See
 [transactions](docs/architecture/transactions.md).
 
 Review dependencies for each release. The 2026-11-08 review after the demo fixes

@@ -5,12 +5,15 @@ transaction model has useful safeguards, but recovery, contention and operationa
 acceptance remain incomplete. A working demo and green unit tests do not close
 these gates. Assign an owner and attach evidence for every row before approval.
 
+Target event: **21 November 2026**. [Register recovery](operations/register-recovery.md)
+is the current priority; no automatic live approval follows from its implementation.
+
 ## Priority 0 — required before a live bazaar
 
 | Gate | Work required | Evidence for acceptance | Current status |
 | --- | --- | --- | --- |
-| PR-01: uncertain sale recovery | One durable browser command/receipt state machine; operation status endpoint; consistent scope and payload identity; preserve IDs through retryable errors | Interrupt browser/network at every stage before/after commit; each intended sale occurs once and the cashier sees its confirmed outcome | Open |
-| PR-02: contention handling | Replace the five-attempt cliff with measured bounded retry/backoff or another explicit serialization strategy; classify busy/timeout failures | Six synchronized registers and mixed manager commands: no partial or duplicate writes, no unresolved user outcome | Open; six-way service test reproduces 409 |
+| PR-01: uncertain sale recovery | One durable browser command/receipt state machine; operation status endpoint; consistent scope and payload identity; preserve IDs through retryable errors | Interrupt browser/network at every stage before/after commit; each intended sale occurs once and the cashier sees its confirmed outcome | Software controls implemented; 24 browser scenarios across two engines; physical-device acceptance open |
+| PR-02: contention handling | Replace the five-attempt cliff with measured bounded retry/backoff or another explicit serialization strategy; classify busy/timeout failures | Six synchronized registers and mixed manager commands: no partial or duplicate writes, no unresolved user outcome | Partly implemented: bounded same-ID client retries; server still has five attempts; intended-server soak open |
 | PR-03: bounded work | Replace full-event reads on every mutation/poll with targeted queries, aggregates and paginated/delta reads; add indexes | End-of-day and double-forecast datasets meet agreed response targets under simultaneous register traffic | Open |
 | PR-04: database invariants | Unique event receipt numbers and open till numbers; consistent operation scope; stable actors and validated migrations | Concurrent open/sale/payout/close/void tests; old-data upgrade and rollback/restore drill | Partly implemented |
 | PR-05: production access | Explicit production bootstrap, no demo accounts/login; staff lifecycle, PIN change, revoke sessions, manager recovery; define cashier data access | New production database has no default credentials; permission and recovery tests pass | Open |

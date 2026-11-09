@@ -66,3 +66,64 @@ test('Ein geänderter Client-IP-Header umgeht die kontobezogene Anmeldesperre ni
  for(let n=0;n<10;n++)await assert.rejects(()=>login(id,'0000',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.10'}})),/PIN/);
  await assert.rejects(()=>login(id,'5826',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.11'}})),e=>e.status===429);
 });
+
+test('operation lookup verifies command contents, actor, event and action',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Recovery identity',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation:50,received:1000};
+ assert.equal((await operationStatus('sale',p,cashier)).state,'not_found');
+ const first=await mutate('sale',p,cashier);
+ assert.deepEqual((await operationStatus('sale',p,cashier)).result,first);
+ for(const changed of [{...p,received:2000},{...p,donation:100},{...p,eventId:'demo-fruehjahr'}])await assert.rejects(()=>mutate('sale',changed,cashier),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>operationStatus('sale',p,manager),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>operationStatus('void',p,cashier),e=>e.code==='OPERATION_MISMATCH');
+ assert.equal((await readState(id,manager)).sales.length,1);
+});
+test('a recorded rejection cannot later turn into a successful sale under the same ID',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Durable rejection',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:100};
+ await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ assert.equal((await operationStatus('sale',p,cashier)).state,'rejected');
+ await assert.rejects(()=>mutate('sale',{...p,received:1000},cashier),e=>e.code==='OPERATION_MISMATCH');
+ await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ assert.equal((await readState(id,manager)).sales.length,0);
+});
+test('legacy sale replay compares the original receipt when no request hash exists',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Legacy recovery',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
+ const result=await mutate('sale',p,cashier);db.sqlite.prepare('UPDATE operations SET request_hash=NULL WHERE id=?').run(p.operationId);
+ assert.deepEqual((await operationStatus('sale',p,cashier)).result,result);
+ await assert.rejects(()=>operationStatus('sale',{...p,received:2000},cashier),e=>e.code==='OPERATION_MISMATCH');
+});
+test('sale replay racing end-of-sales has one durable outcome and no partial booking',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const {eventId:id}=await cmd('createEvent',{name:'Phase and reply race',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
+ const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
+ const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
+ await Promise.allSettled([cmd('eventStatus',{eventId:id,status:'settlement'}),...Array.from({length:6},()=>mutate('sale',p,cashier))]);
+ const outcome=await operationStatus('sale',p,cashier);assert.notEqual(outcome.state,'not_found');
+ const s=await readState(id,manager);assert.equal(s.sales.length,outcome.state==='committed'?1:0);
+ assert.equal(db.sqlite.prepare('SELECT count(*) n FROM operations WHERE id=?').get(p.operationId).n,1);
+ if(outcome.state==='committed')assert.deepEqual(await mutate('sale',p,cashier),outcome.result);
+ else await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+});
+
+test('the recovery migration preserves pre-upgrade operation results',()=>{
+ const old=openDatabase(':memory:');const files=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
+ for(const file of files.slice(0,2))old.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+ old.sqlite.prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at) VALUES(?,?,?,?,?,?)').run('legacy-operation','legacy-event','legacy-staff','sale','{"saleId":"legacy-sale","number":1}','2026-11-08');
+ for(const file of files.slice(2))old.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+ const row=old.sqlite.prepare('SELECT * FROM operations').get();assert.equal(row.request_hash,null);assert.equal(row.outcome,'committed');assert.equal(JSON.parse(row.result).saleId,'legacy-sale');old.close();
+});
+test('invalid event creation has a durable rejected outcome so the form can be corrected safely',async()=>{
+ const {operationStatus}=await import(join(tmp,'service.mjs'));
+ const p={operationId:crypto.randomUUID(),eventId,name:'X',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:6};
+ await assert.rejects(()=>mutate('createEvent',p,manager),e=>e.recorded===true);
+ assert.equal((await operationStatus('createEvent',p,manager)).state,'rejected');
+ assert.equal(db.sqlite.prepare('SELECT count(*) n FROM events WHERE id=?').get(p.operationId).n,0);
+});

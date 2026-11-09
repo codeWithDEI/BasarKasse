@@ -17,6 +17,8 @@ The six-register characterization test intentionally verifies that today's
 five-attempt limit can return 409 and that explicit retry preserves exactly one
 sale. **A passing characterization test does not mean the contention gate passes.**
 A second test sends competing seller payouts and checks the till is debited once.
+Recovery regression tests also cover immutable outcomes, changed-payload/actor
+rejection, schema upgrade, legacy sale verification and unknown-error classification.
 
 ## Reproducible HTTP workload
 
@@ -54,7 +56,27 @@ traffic are not included; the harness performs a full refresh after each sale.
 Run both `pnpm run build:selfhost` and `pnpm run build` when shared runtime code
 changes. Hosted D1 must have its own integration/capacity results before live use.
 The workflow in `.github/workflows/ci.yml` runs regression tests, type checking,
-both builds and the isolated HTTP check; it does not deploy.
+both builds, the isolated HTTP check and browser recovery scenarios; it does not deploy.
+
+## Browser interruption suite
+
+```sh
+pnpm run build:selfhost
+pnpm exec playwright install chromium webkit
+pnpm run test:recovery
+```
+
+On Linux use `pnpm exec playwright install --with-deps chromium webkit` to install
+required system libraries. The fixed loopback test port 3138 must be free; the
+runner refuses to reuse an existing server. All data is disposable.
+
+The suite tests request/reply loss, reload/tab closure, session expiry, transient
+409/503, tab ownership, storage failures before/after commit, interrupted item
+entry and waking while an earlier reply remains suspended. Chromium uses an
+Android tablet layout; WebKit uses an iPad layout. This is engine/emulation
+evidence, not a real OS screen-lock or venue Wi-Fi certification. See
+[recorded recovery results](results-2026-11-09.md) and the
+[physical-device rehearsal](../operations/register-recovery.md).
 
 ## Acceptance cases still required
 

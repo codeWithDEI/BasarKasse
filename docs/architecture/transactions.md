@@ -1,88 +1,113 @@
 # Transactions, concurrency and recovery
 
-## Booking protocol implemented today
+Status: evaluation implementation. The recovery change implements the software
+controls below; actual tablet/venue acceptance and the other
+[production gates](../production-readiness.md) remain required.
 
-1. Validate the operation ID; return a stored result if its staff/action/event
-   scope matches an existing operation.
-2. Read event revision and financial state; check roles, phase, till and balances.
-3. Build one atomic batch: conditional event revision update, financial statements,
-   audit entry and stored operation result.
-4. Claim the event revision with `UPDATE ... WHERE version = observedVersion`.
-   Financial/audit/operation statements are guarded by `events.last_op = operationId`.
-5. Commit all statements or roll them all back. If the claim failed, read fresh
-   state and retry. The current limit is **five internal attempts**, then HTTP 409.
-6. Return the stored financial result only after successful commit. A repeated
-   operation returns the original sale ID/number/change instead of a new sale.
+## Server booking protocol
 
-`createEvent` and `addStaff` use separate atomic batches outside this event CAS
-loop. Their concurrent-replay/error handling is not yet uniform with sales.
+1. Validate the operation ID. Look up its stored outcome and verify staff, event,
+   action and request fingerprint before returning it.
+2. Read the event revision and financial state; validate the command.
+3. Build one atomic batch claiming the observed revision. Successful commands
+   store their financial effect, audit entry and `committed` operation result.
+4. Business rejections are also stored against the operation ID, guarded by the
+   same event revision, as a `rejected` outcome with no financial/audit effect.
+5. All statements are guarded by `events.last_op = operationId`; the operation
+   primary key prevents two outcomes for one ID. A failed batch rolls back.
+6. On contention, read fresh state and retry up to five internal attempts.
+   Exhaustion returns `409 / CONCURRENT_WRITE`, not a recorded rejection.
+
+A stored rejection cannot later become a sale, even when another copy of the
+request is in flight. The rejection participates in the revision/operation
+protocol; it is not inferred from an arbitrary HTTP 400. If another copy committed
+first, replay returns its stored result instead. This prevents a client from
+clearing a rejected draft while an earlier copy later books the same intent.
+
+`createEvent` uses its own atomic creation batch and unique operation record;
+validation failures also have durable rejected outcomes. `addStaff` is a separate
+non-financial, non-durable browser workflow: PINs are never put in pending storage
+or a fast request hash. It retains scope-checked operation replay but has no full
+payload fingerprint. Recovery guarantees here primarily concern financial commands.
+
+## Outcome API and identity
+
+POST `{action: "operationStatus", command: originalCommand}` to `/api/basar`.
+The endpoint requires the same authenticated staff member, expected Origin and
+JSON. It returns `committed` plus the original result, `rejected` plus the stored
+error, or `not_found`. A mismatch of actor/event/action/payload returns 409 and
+must be resolved by the operator; it is not permission to create a new ID.
+
+`request_hash` is a SHA-256 fingerprint of the relevant non-secret business
+fields, with stable object-key ordering and the original item order. Reusing an
+ID for different financial contents is rejected. Migration `0002` preserves old
+operation rows as committed with a null hash. Legacy sale replay is verified
+against its original persisted sale, including items, till, donation and cash
+received. Other legacy actions retain scope checks without a payload fingerprint.
+
+`not_found` does not prove an earlier request cannot still commit. The browser
+resubmits the **same immutable command and ID**; database serialization and the
+unique outcome handle races safely. Do not delete operation records while clients
+can still hold pending requests.
+
+## Browser state and wake-up
+
+`lib/basar/register.ts` defines one versioned record per origin, base path and
+browser profile. It holds the selected event/till, basket, partially entered
+fields, pending command and last receipt. Every relevant transition replaces one
+localStorage value synchronously before updating React state:
 
 ```mermaid
-sequenceDiagram
-  participant B as Browser
-  participant A as API/service
-  participant D as Database
-  B->>B: Persist draft + operation ID
-  B->>A: POST sale with same ID on retry
-  A->>D: Read stored operation and current revision
-  A->>D: Atomic revision claim + sale + audit + result
-  D-->>A: Commit or rollback
-  A-->>B: Stored sale result
-  B->>B: Clear basket/pending, retain receipt
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Pending: Persist original command before transmission
+  Pending --> Pending: Timeout / offline / 401 / unrecorded 409 or 503
+  Pending --> Receipt: Committed result; atomically clear basket and pending
+  Pending --> Draft: Durable rejected outcome; retain unbooked basket
+  Receipt --> Draft: Cashier explicitly starts next customer
 ```
 
-The final browser transition above spans multiple current localStorage/React
-updates; it is **not atomic**. That gap requires fault testing and redesign.
+Adding/editing an item and clearing its input fields is also one write. If an
+intent cannot be stored, no request is sent. If storing a confirmed receipt fails,
+the original pending record remains recoverable; new work is blocked. An invalid
+receipt cannot clear the original basket. Corrupt/unwritable storage fails closed.
 
-## Storage contracts
+A Web Lock permits one writable BasarKasse tab per profile/path. A second tab waits
+and reloads current state after the first releases ownership. An unexpected
+external storage change blocks further writes. This does not coordinate separate
+browsers/profiles or replace server-side transaction controls.
 
-The self-hosted adapter uses `DatabaseSync`, WAL, foreign keys and a 5-second busy
-timeout. `batch()` executes `BEGIN IMMEDIATE`, all statements, then `COMMIT`, with
-`ROLLBACK` on error. SQLite permits one writer at a time; WAL does not create six
-parallel writers. A single application process serializes synchronous SQL work,
-which can also delay HTTP responses as history grows.
+On `online`, focus, `pageshow` and return to a visible page, stale waiting requests
+are aborted locally and the original outcome is checked. Repeated wake notifications
+coalesce snapshot reads. An existing pending command is checked before resubmission;
+up to three bounded foreground attempts preserve the same ID. Each recovery round
+has a 20-second request budget. A missing/expired session retains the pending
+command and requires the original person to log in again. The receipt and change
+remain visible until the cashier selects **Nächster Einkauf**.
+
+There are no new offline sales or service-worker offline app shell. A discarded
+page can reload from the server once connectivity returns. Never clear browser
+data, change profile/origin or re-enter an uncertain basket to dismiss a problem.
+See the [operator recovery procedure](../operations/register-recovery.md).
+
+## Storage contracts and remaining limits
+
+Self-hosting uses `DatabaseSync`, WAL, foreign keys, a 5-second busy timeout and
+`BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` batches. SQLite allows one writer at a time;
+WAL does not create six parallel writers. See
 [SQLite transactions](https://sqlite.org/lang_transaction.html) and
-[WAL documentation](https://sqlite.org/wal.html) describe these constraints.
+[WAL](https://sqlite.org/wal.html). D1 uses its documented
+[atomic batch contract](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
+The new recovery suite does not certify remote D1.
 
-The hosted service relies on D1 `batch()` transaction semantics. A failed statement
-rolls back the batch. This contract is documented by
-[Cloudflare](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
-Local SQLite tests do not certify remote D1 latency, limits or behavior. Run the
-same adapter/HTTP acceptance scenarios against whichever backend is selected.
+Unclassified POST storage failures return `503 / OUTCOME_UNKNOWN`, without raw
+SQL errors. Only an explicit recorded outcome can release a pending financial
+command. Browser storage is not an off-device backup or a power-loss durability
+guarantee. The adapter does not explicitly set SQLite `synchronous`.
 
-The adapter does not explicitly set `synchronous`; record the effective SQLite
-version and durability PRAGMAs in the deployment acceptance test. Container restart
-tests are not evidence for power-loss durability or a reliable storage device.
-
-## Evidence and current limits
-
-Six synchronized service calls reproducibly cause a 409 for one call in each
-six-call burst in the recorded test: five retries are insufficient for that
-schedule. The rejected call leaves no partial financial booking. Explicit retry
-with the same ID completes it; 60 distinct commands produced exactly 60 sales.
-This is a **known contention limit**, not a passed production acceptance gate.
-An HTTP workload has different scheduling; its results are recorded separately.
-
-An operation ID protects retries of one command. It does not deduplicate a basket
-submitted under a new ID. The current result lookup also does not compare a
-canonical payload hash: reusing the same ID for different sale contents returns
-the earlier result. Scope checks are inconsistent in inner retry/catch branches;
-standardize them for all actions and reject conflicting reuse.
-
-## Failure cases to resolve before real cash
-
-| Failure | Current behavior / remaining risk | Required acceptance |
-| --- | --- | --- |
-| Reply lost after commit | Same ID can retrieve result; new ID could duplicate the basket | Browser recovers the original receipt and clears the draft exactly once |
-| Browser closes after reply | Pending key is removed before cleared draft/receipt is durably saved | One durable recovery record/state machine, tested at every transition |
-| Temporary DB failure | Non-ApiError POST failures currently become 400; client clears pending for all responses below 500 | Classify retryable/unknown outcomes, preserve ID, provide status lookup |
-| Six-way CAS contention | Five attempts may exhaust; browser clears pending on 409 | Bounded retry/backoff with preserved ID and explicit user outcome |
-| Device offline | Draft retained, no supported offline booking | No success display without server commit; safe reconnect/replay |
-| Crash during batch | SQLite rollback/commit contract protects one transaction | Process termination around commit with independent ledger verification |
-| Double payout / phase change / closure race | CAS and payout unique index protect tested cases | Test mixed sale/end-sales/void/withdraw/payout/close schedules |
-| Backup restored while devices retain pending work | Restored DB may lack already acknowledged operations | Document cutover fence and reconcile devices before resuming |
-
-Persist only non-secret command data; `addStaff` currently puts the PIN into the
-same pending-command storage as financial commands. An API for operation status,
-payload fingerprint and stable error codes should be part of the recovery contract.
-Do not silently retry arbitrary new IDs or interpret a timeout as a failed sale.
+The full-event query cost, server contention envelope, disk/power failure,
+backup-restore cutover fencing and actual tablet OS suspension still need their
+own acceptance evidence. The [historical six-way conflict](../testing/results-2026-11-08.md)
+remains relevant: extra asynchronous fingerprint work can change scheduling,
+not prove contention impossible. New results are recorded
+[separately](../testing/results-2026-11-09.md).

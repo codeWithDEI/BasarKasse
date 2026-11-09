@@ -17,7 +17,8 @@ See the [production readiness gates](docs/production-readiness.md) and
 - Full-sale voids, deposits, withdrawals, seller payouts and counted till closure.
 - Central persistence, operation IDs for replay protection, atomic booking batches.
 - Seller statements, CSV, browser printing and event JSON exports.
-- Local drafts and pending commands survive reloads. **This is not offline checkout.**
+- Atomic local drafts, pending commands and recovered receipts survive reloads;
+  wake/reconnect reconciles the original operation. **This is not offline checkout.**
 
 There is no physical article inventory, partial refund workflow, payment terminal,
 TSE integration or fiscal export. Account disablement, PIN changes and session
@@ -74,6 +75,10 @@ The load script creates and deletes its own database and loopback server. It
 never accepts an existing server URL. By default it seeds 5,000 sales, then sends
 600 new sales through six sessions, including duplicate requests, refreshes and
 restart checks. This is evidence for that workload, not live-event certification.
+Browser interruption tests run with `pnpm exec playwright install chromium webkit`
+and `pnpm run test:recovery` after the self-hosted build. They own a separate
+temporary server/database and emulate Android/iPad layouts.
+
 See [test methodology](docs/testing/README.md) for parameters and limitations.
 
 ## Deploy an evaluation
@@ -104,6 +109,7 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | [Testing](docs/testing/README.md) | Reproducible checks and acceptance scenarios |
 | [Recorded results](docs/testing/results-2026-11-08.md) | What was actually measured and what was not |
 | [Deployment and recovery](docs/operations/deployment.md) | Configuration, migrations, backups and restore |
+| [Register recovery](docs/operations/register-recovery.md) | Lock screen, Wi-Fi, same-person login and device rehearsal |
 | [Event-day runbook](docs/operations/event-day.md) | Rehearsal, opening, incident response and reconciliation |
 | [Production readiness](docs/production-readiness.md) | Prioritized work and release gates for real money |
 | [Security](SECURITY.md) | Trust boundaries, reporting and known limitations |

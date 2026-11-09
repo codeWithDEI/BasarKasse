@@ -1,0 +1,120 @@
+import {test,expect,type BrowserContext,type Page} from '@playwright/test';
+import {emptyRegister,registerKey} from '../../lib/basar/register';
+import {readFileSync} from 'node:fs';
+const basePath=JSON.parse(readFileSync('.next/required-server-files.json','utf8')).config.basePath;
+const key=registerKey(basePath),origin='http://127.0.0.1:3138',api=origin+basePath+'/api/basar';
+async function setup(context:BrowserContext,page:Page) {
+ const post=async(action:string,p:Record<string,unknown>={})=>{const r=await context.request.post(api,{headers:{Origin:origin},data:{action,operationId:crypto.randomUUID(),...p}});expect(r.status()).toBe(200);return r.json();};
+ await post('demo',{staffId:'demo-leitung'});
+ const {eventId}=await post('createEvent',{eventId:'demo-fruehjahr',name:'Browser recovery '+crypto.randomUUID(),date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:6});
+ const {tillId}=await post('openTill',{eventId,number:1,opening:10000});
+ await page.addInitScript(({key,record})=>{if(localStorage.getItem(key)===null)localStorage.setItem(key,JSON.stringify(record));},{key,record:{...emptyRegister(),eventId,tillId}});
+ await page.goto(origin+basePath+'/');
+ await expect(page.getByRole('button',{name:'Zum Einkauf hinzufügen'})).toBeEnabled();
+ return {eventId,tillId,post,state:async()=>{const r=await context.request.get(api+'?event='+eventId);expect(r.status()).toBe(200);return r.json();}};
+}
+async function basket(page:Page) {
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
+ await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
+ await page.getByRole('textbox',{name:'Aufrunden auf',exact:true}).fill('7');
+ await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('10');
+}
+async function receipt(page:Page) {
+ await expect(page.getByText('VERKAUF #0001 GESPEICHERT')).toBeVisible();
+ await expect(page.locator('.change-box strong')).toHaveText(/3,00/);
+ const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);
+ expect(saved.pending).toBeNull();expect(saved.items).toEqual([]);expect(saved.lastSale.change).toBe(300);
+}
+async function pending(page:Page) {
+ await expect.poll(()=>page.evaluate(key=>!!JSON.parse(localStorage.getItem(key)!).pending,key)).toBe(true);
+}
+
+test('draft including unsubmitted input survives reload; a receipt replaces basket and pending together',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('7');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('2,00');
+ await page.reload();await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
+ await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('7');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('2,00');
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);await page.reload();await receipt(page);
+ expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('lost reply after server commit recovers the original receipt after reload without a second sale POST',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);let posts=0;
+ await context.route('**/api/basar',async route=>{if(route.request().postDataJSON()?.action==='sale'){posts++;const r=await route.fetch();expect(r.status()).toBe(200);await route.abort('failed');}else await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);
+ await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
+ await page.reload();await receipt(page);expect(posts).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('request lost before server arrival survives closing the tab and resumes with the same ID',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);const ids:string[]=[];
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(ids.length===1)return route.abort('failed');}await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
+ await page.close();const reopened=await context.newPage();await reopened.goto(origin+basePath+'/');await receipt(reopened);
+ expect(new Set(ids).size).toBe(1);expect(ids.length).toBe(2);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('offline and expired session retain pending work until the same person logs in again',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);let first=true;const ids:string[]=[];
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(first){first=false;return route.abort('failed');}}await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
+ await context.setOffline(true);await context.clearCookies();await pending(page);await context.setOffline(false);await page.reload();
+ await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();await page.getByRole('button',{name:'Übung als Kassenleitung'}).click();
+ await receipt(page);expect(new Set(ids).size).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('failure persisting the acknowledged receipt keeps the original pending command recoverable',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);
+ await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===key&&JSON.parse(v).lastSale)throw new DOMException('Injected quota failure','QuotaExceededError');return original.call(this,k,v);};},key);
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await expect(page.getByText(/Kassenstand konnte nicht sicher gespeichert/)).toBeVisible();await pending(page);
+ await page.reload();await receipt(page);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('a second tab is blocked until the first releases ownership, then sees the original receipt',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);const other=await context.newPage();await other.goto(origin+basePath+'/');
+ await expect(other.getByText(/in einem anderen Tab/)).toBeVisible();await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);
+ await page.close();await receipt(other);expect((await fixture.state()).sales).toHaveLength(1);
+});
+for(const status of [409,503])test(`HTTP ${status} without a recorded outcome preserves the ID through retries and pageshow recovery`,async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);const ids:string[]=[];let blocked=true;
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(blocked)return route.fulfill({status,contentType:'application/json',body:JSON.stringify({error:'Injected transient failure',code:status===409?'CONCURRENT_WRITE':'OUTCOME_UNKNOWN',recorded:false})});}await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await expect(page.getByText('Injected transient failure')).toBeVisible();await pending(page);expect((await fixture.state()).sales).toHaveLength(0);
+ blocked=false;await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));await receipt(page);expect(new Set(ids).size).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
+test('a recorded business rejection clears only the pending command and retains the unbooked basket',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);
+ await fixture.post('eventStatus',{eventId:fixture.eventId,status:'settlement'});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();
+ await expect(page.getByText(/Nicht gebucht:/)).toBeVisible();
+ const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);
+ expect(saved.pending).toBeNull();expect(saved.lastSale).toBeNull();expect(saved.items).toHaveLength(1);expect((await fixture.state()).sales).toHaveLength(0);
+});
+
+test('if the pending intent cannot be saved locally, no sale request is transmitted',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);let posts=0;
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale')posts++;await route.continue();});
+ await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===key&&JSON.parse(v).pending)throw new DOMException('Injected quota failure','QuotaExceededError');return original.call(this,k,v);};},key);
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await expect(page.getByText(/Kassenstand konnte nicht sicher gespeichert/)).toBeVisible();
+ expect(posts).toBe(0);expect((await fixture.state()).sales).toHaveLength(0);
+});
+
+test('interruption immediately after adding an item cannot restore that item in both basket and entry fields',async({context,page})=>{
+ await setup(context,page);
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
+ await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){const before=k===key?JSON.parse(this.getItem(k)!):null;original.call(this,k,v);if(k===key&&!before.items.length&&JSON.parse(v).items.length===1)throw new DOMException('Interrupted after write','QuotaExceededError');};},key);
+ await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();await expect(page.getByText(/Kassenstand konnte nicht sicher gespeichert/)).toBeVisible();
+ await page.reload();await expect(page.locator('.basket-row')).toHaveCount(1);await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('');
+});
+
+test('waking while a committed sale reply is still suspended retrieves the receipt without waiting for the old response',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);let release!:()=>void,committed!:()=>void,posts=0;
+ const hold=new Promise<void>(resolve=>{release=resolve;}),saved=new Promise<void>(resolve=>{committed=resolve;});
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){posts++;const response=await route.fetch();expect(response.status()).toBe(200);committed();await hold;try{await route.abort('failed');}catch{/* The wake handler may already have cancelled the browser request. */}}else await route.continue();});
+ try {
+  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await saved;
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await receipt(page);
+  expect(posts).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
+ } finally {release();}
+});

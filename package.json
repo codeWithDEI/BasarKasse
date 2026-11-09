@@ -14,9 +14,10 @@
     "db:generate": "drizzle-kit generate",
     "build:selfhost": "next build --webpack",
     "start:selfhost": "node selfhost/start.mjs",
-    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts && node --experimental-strip-types --test tests/service.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs",
+    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts tests/register.test.ts && node --experimental-strip-types --test tests/service.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs && node --test tests/api-recovery.test.mjs",
     "test:load": "node scripts/test-register-load.mjs",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:recovery": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -47,6 +48,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
     "@cloudflare/workers-types": "4.20260515.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
