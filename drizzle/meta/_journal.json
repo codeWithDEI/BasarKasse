@@ -22,6 +22,13 @@
       "when": 1794215191251,
       "tag": "0002_operation_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794232850298,
+      "tag": "0003_event_operations",
+      "breakpoints": true
     }
   ]
 }

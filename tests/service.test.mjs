@@ -7,7 +7,7 @@ import {build} from 'vite';
 import {openDatabase} from '../selfhost/sqlite.mjs';
 const tmp=mkdtempSync(join(tmpdir(),'basar-test-'));
 await build({configFile:false,logLevel:'error',build:{lib:{entry:resolve('lib/basar/service.ts'),formats:['es'],fileName:()=> 'service.mjs'},outDir:tmp,emptyOutDir:false,minify:false}});
-const {bootstrap,mutate,readState,login,auth}=await import(join(tmp,'service.mjs'));
+const {bootstrap,mutate,readState,readRegisterState,login,auth}=await import(join(tmp,'service.mjs'));
 const db=openDatabase(':memory:');globalThis.__basarDB=db;for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())db.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));await bootstrap();
 const manager={id:'demo-leitung',name:'Kassenleitung',role:'manager'},cashier={id:'demo-kasse',name:'Kassiererin',role:'cashier'};
 const eventId='demo-fruehjahr';const cmd=(action,p={},user=manager)=>mutate(action,{operationId:crypto.randomUUID(),eventId,...p},user);
@@ -136,4 +136,31 @@ test('invalid event creation has a durable rejected outcome so the form can be c
  await assert.rejects(()=>mutate('createEvent',p,manager),e=>e.recorded===true);
  assert.equal((await operationStatus('createEvent',p,manager)).state,'rejected');
  assert.equal(db.sqlite.prepare('SELECT count(*) n FROM events WHERE id=?').get(p.operationId).n,0);
+});
+
+test('compact register pages retain whole-event money and sellers while limiting history to fifty receipts',async()=>{
+ const id=(await cmd('createEvent',{name:'Paged ledger',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:1})).eventId;
+ const till=(await cmd('openTill',{eventId:id,number:1,opening:10000})).tillId;
+ for(let n=0;n<65;n++)await cmd('sale',{eventId:id,tillId:till,items:[{id:crypto.randomUUID(),seller:n%2+1,price:650}],donation:50,received:1000});
+ const full=await readState(id,manager),compact=await readRegisterState(id,manager),next=await readRegisterState(id,manager,{before:compact.salesPage.nextBefore});
+ assert.equal(compact.sales.length,50);assert.equal(next.sales.length,15);assert.equal(new Set([...compact.sales,...next.sales].map(s=>s.id)).size,65);
+ assert.equal(compact.summary.gross,42250);assert.equal(compact.summary.donations,3250);assert.equal(compact.summary.count,65);assert.equal(compact.summary.itemCount,65);assert.equal(compact.summary.tillBalances[till],55500);
+ assert.equal(compact.summary.sellers[0].gross,21450);assert.equal(compact.summary.sellers[0].commission,3218);assert.equal(compact.summary.sellers[1].gross,20800);
+ assert.equal(full.sales.length,65);assert.equal((await readRegisterState(id,manager,{search:'2'})).sales.every(s=>s.number.toString().includes('2')||s.items.some(i=>i.seller===2)),true);
+});
+test('SQLite rejects duplicate event receipt and simultaneously open till numbers independently of application validation',async()=>{
+ const id=(await cmd('createEvent',{name:'Constraint ledger',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:1})).eventId;
+ const till=(await cmd('openTill',{eventId:id,number:1,opening:10000})).tillId;
+ await cmd('sale',{eventId:id,tillId:till,items:[{id:crypto.randomUUID(),seller:1,price:100}],received:100});
+ assert.throws(()=>db.sqlite.prepare('INSERT INTO sales SELECT ?,event_id,till_id,staff_id,staff_name,number,items,total,received,created_at,voided_at,voided_by,void_reason,donation FROM sales WHERE event_id=?').run(crypto.randomUUID(),id),/UNIQUE/);
+ assert.throws(()=>db.sqlite.prepare('INSERT INTO till_sessions SELECT ?,event_id,number,opening,opened_at,opened_by,closed_at,closed_by,counted,expected,note FROM till_sessions WHERE id=?').run(crypto.randomUUID(),till),/UNIQUE/);
+});
+test('restored databases block all writes until reconciliation and then reject both legacy and explicit old tablet epochs',async()=>{
+ const state=db.sqlite.prepare('SELECT * FROM instance_state WHERE id=1').get();
+ try {
+  db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run('restored-fixture');
+  await assert.rejects(()=>cmd('openTill',{number:1,opening:100}),e=>e.code==='WRITE_PAUSED'&&!e.recorded);
+  db.sqlite.prepare('UPDATE instance_state SET writes_paused=0 WHERE id=1').run();
+  for(const instanceEpoch of [undefined,'initial'])await assert.rejects(()=>cmd('openTill',{number:1,opening:100,instanceEpoch}),e=>e.code==='RESTORE_REVIEW_REQUIRED'&&!e.recorded);
+ } finally {db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=? WHERE id=1').run(state.epoch,state.writes_paused);}
 });

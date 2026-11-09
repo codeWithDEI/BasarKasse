@@ -1,4 +1,6 @@
-import {bootstrap, auth, login, logout, readState, mutate, operationStatus, ApiError} from '@/lib/basar/service';
+import {recordApiResult} from '@/lib/basar/health';
+import {assertWriteEpoch} from '@/lib/basar/queries';
+import {bootstrap, auth, login, logout, readState, readRegisterState, mutate, operationStatus, ApiError} from '@/lib/basar/service';
 import {isSameOrigin, sessionCookie} from '@/lib/basar/http';
 
 export const dynamic = 'force-dynamic';
@@ -9,13 +11,20 @@ export async function GET(request: Request) {
   try {
     await bootstrap();
     const user = await auth(request);
-    return json(await readState(new URL(request.url).searchParams.get('event') || undefined, user));
+    const query=new URL(request.url).searchParams;
+    if(query.get('view')==='register'){
+      const before=query.has('before')?Number(query.get('before')):undefined;
+      if(before!==undefined&&(!Number.isSafeInteger(before)||before<1))throw new ApiError('Ungültige Verkaufsseite.');
+      const search=query.get('search')||'';if(search.length>80)throw new ApiError('Der Suchtext ist zu lang.');
+      return json(await readRegisterState(query.get('event')||undefined,user,{before,search}));
+    }
+    return json(await readState(query.get('event') || undefined, user));
   } catch (error) {
     return json({error: error instanceof ApiError ? error.message : 'Die Daten konnten nicht geladen werden. Bitte die Verbindung prüfen.'}, error instanceof ApiError ? error.status : 503);
   }
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   try {
     if (!isSameOrigin(request)) return json({error:'Ungültiger Anfrageursprung.',code:'ORIGIN_REJECTED'},403);
     if (!request.headers.get('content-type')?.includes('application/json')) return json({error:'JSON erforderlich.',code:'INVALID_REQUEST'},415);
@@ -38,6 +47,7 @@ export async function POST(request: Request) {
     if(!user) throw new ApiError('Bitte erneut mit derselben Person anmelden. Der offene Vorgang bleibt erhalten.',401,'AUTH_REQUIRED');
     if(body.action==='operationStatus') {
       if(!body.command || typeof body.command.action!=='string') throw new ApiError('Die Buchungsdaten fehlen.');
+      await assertWriteEpoch(body.command);
       return json(await operationStatus(body.command.action,body.command,user));
     }
     return json(await mutate(body.action,body,user));
@@ -47,3 +57,5 @@ export async function POST(request: Request) {
     return json({error:'Das Buchungsergebnis ist noch unklar. Bitte die Verbindung wiederherstellen und den Status prüfen.',code:'OUTCOME_UNKNOWN',recorded:false},503);
   }
 }
+
+export async function POST(request:Request){const start=performance.now();const response=await handlePost(request);recordApiResult(response.status,performance.now()-start);return response;}

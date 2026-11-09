@@ -1,0 +1,10 @@
+[Unit]
+Description=Verified BasarKasse SQLite backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/basarkasse-backup
+TimeoutStartSec=180
+UMask=0077

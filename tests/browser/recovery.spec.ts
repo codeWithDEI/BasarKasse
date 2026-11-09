@@ -88,7 +88,7 @@ for(const status of [409,503])test(`HTTP ${status} without a recorded outcome pr
 
 test('a recorded business rejection clears only the pending command and retains the unbooked basket',async({context,page})=>{
  const fixture=await setup(context,page);await basket(page);
- await fixture.post('eventStatus',{eventId:fixture.eventId,status:'settlement'});
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale')await fixture.post('eventStatus',{eventId:fixture.eventId,status:'settlement'});await route.continue();});
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();
  await expect(page.getByText(/Nicht gebucht:/)).toBeVisible();
  const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);
@@ -170,4 +170,30 @@ test('a deliberate person switch uses the new PIN and preserves an unsubmitted b
  await expect(page.locator('dialog')).not.toBeVisible();await expect(page.locator('.profile')).toContainText('Kassiererin');
  await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);expect((await fixture.state()).sales[0].staff_id).toBe('demo-kasse');
+});
+
+
+test('paged sales retain full totals, search older receipts and export the whole event',async({context,page})=>{
+ const fixture=await setup(context,page);
+ for(let n=1;n<=55;n++)await fixture.post('sale',{eventId:fixture.eventId,tillId:fixture.tillId,items:[{id:crypto.randomUUID(),seller:n===1?147:42,price:100}],received:100});
+ await page.reload();await page.getByRole('button',{name:'Verkäufe',exact:true}).click();
+ await expect(page.locator('tbody tr')).toHaveCount(50);await expect(page.locator('.stat-card').filter({hasText:'Einkäufe'}).locator('strong')).toHaveText('55');
+ await page.getByRole('button',{name:'Ältere Verkäufe',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(5);
+ await page.getByRole('button',{name:'Neuere Verkäufe',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(50);
+ await page.getByRole('textbox',{name:'Verkäufe suchen',exact:true}).fill('147');await expect(page.locator('tbody tr')).toHaveCount(1);await expect(page.locator('tbody tr')).toContainText('#0001');
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'CSV',exact:true}).click();const file=await (await download).path();expect(readFileSync(file!,'utf8').trim().split('\n')).toHaveLength(56);
+});
+
+test('operational dashboard requires a manager and marks missing backup evidence as critical',async({context,page})=>{
+ const fixture=await setup(context,page);await page.goto(origin+basePath+'/health');
+ await expect(page.locator('.health-overall h2')).toHaveText('Handlungsbedarf');await expect(page.getByText('Noch keine geprüfte Sicherung bestätigt')).toHaveCount(2);
+ await fixture.post('demo',{staffId:'demo-kasse'});expect((await context.request.get(origin+basePath+'/api/health')).status()).toBe(403);
+ await context.clearCookies();expect((await context.request.get(origin+basePath+'/api/health')).status()).toBe(401);
+});
+
+test('dashboard cannot leave its last green state on screen after connectivity fails',async({context,page})=>{
+ await setup(context,page);let blocked=false;
+ await context.route('**/api/health',route=>blocked?route.abort('failed'):route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'ok',checkedAt:new Date().toISOString(),release:'synthetic',uptimeSeconds:60,memoryBytes:1000,checks:[{id:'mac-backup',label:'Mac-Sicherung',status:'ok',detail:'Vor 1 Min. geprüft'}]})}));
+ await page.goto(origin+basePath+'/health');await expect(page.locator('.health-overall h2')).toHaveText('Betrieb überwacht');
+ blocked=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.locator('.health-overall h2')).toHaveText('Handlungsbedarf');await expect(page.locator('.health-card h2')).toHaveText('Nicht aktuell');
 });

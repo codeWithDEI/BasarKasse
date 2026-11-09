@@ -6,12 +6,15 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_BASE_PATH: /basarkasse
+        BASAR_REVISION: ${BASAR_REVISION:-unrecorded}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
       BASAR_DATABASE: /data/basarkasse.sqlite
+      BASAR_OPS_STATE: /ops-state
+      BASAR_REVISION: ${BASAR_REVISION:-unrecorded}
       BASAR_PUBLIC_ORIGIN: ${BASAR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
       NEXT_PUBLIC_BASE_PATH: /basarkasse
       NEXT_TELEMETRY_DISABLED: 1
@@ -26,6 +29,7 @@ services:
       - /tmp:size=128m,mode=1777
     volumes:
       - demo-data:/data
+      - ${BASAR_OPS_STATE_DIRECTORY:-/srv/basarkasse-ops/state}:/ops-state:ro
     networks:
       - portal
     healthcheck:
@@ -33,7 +37,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3000/basarkasse/api/basar').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+        - "fetch('http://127.0.0.1:3000/basarkasse/api/basar?view=register').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 3
