@@ -13,9 +13,10 @@ void/payout/closure checks and synchronized contention. Service tests compile th
 real service with Vite and use the actual self-hosted SQLite adapter. They do not
 exercise a remote D1 database or browser storage.
 
-The six-register characterization test intentionally verifies that today's
-five-attempt limit can return 409 and that explicit retry preserves exactly one
-sale. **A passing characterization test does not mean the contention gate passes.**
+The six-register characterization test allows a 409 contention result and verifies
+that explicit same-ID retry preserves exactly one sale. The service now uses
+twelve attempts with jitter; the historical five-attempt result remains in the
+dated report. **A passing characterization test does not mean the capacity gate passes.**
 A second test sends competing seller payouts and checks the till is debited once.
 Recovery regression tests also cover immutable outcomes, changed-payload/actor
 rejection, schema upgrade, legacy sale verification and unknown-error classification.
@@ -97,6 +98,8 @@ evidence, not a real OS screen-lock or venue Wi-Fi certification. See
 These are release requirements tracked in [production readiness](../production-readiness.md),
 not features already covered by automated tests. Attach actual runtime, revision,
 workload, failure counts and independent ledger checks to every acceptance report.
+The [9 November operations report](results-operations-2026-11-09.md) records the
+completed Ubuntu run, browser/backup coverage and the remaining physical/fault gates.
 
 
 ## Isolated Ubuntu soak
@@ -131,3 +134,22 @@ acceptance target, actual venue/Wi-Fi/tablet behavior or a guaranteed organizer
 forecast. Refreshes occur after sales rather than reproducing an independent
 12-second browser polling schedule. Recovery/browser fault injection is covered
 by the separate suite. Keep these limits explicit in release decisions.
+
+
+For an additional independent per-receipt/per-seller oracle, start the read-only
+Python checker on the staging host **before** the soak finishes (the harness
+removes its fixture database afterward):
+
+```sh
+sudo python3 scripts/check-soak-ledger.py /srv/basarkasse-validation/scratch /srv/basarkasse-validation/reports/independent-ledger.json --seed 10000 --wait-seconds 1200
+```
+
+This requires Python 3's standard library, not the application's money helpers.
+It waits for event closure, opens one read-only snapshot and checks every fixture
+receipt, the SHA-256 fingerprint of each new command against stored rows, each
+seller's gross/commission/net, cash movement/void/payout intent counts and all six
+counted/expected cash balances. It also deliberately changes two in-memory payout
+amounts on the same till by opposite cents: global and till totals cancel, while
+the per-seller check must reject them. It never edits the database. A private
+synthetic fixture JSON is retained beside its summary for diagnosis; do not run
+this fixture-specific checker on real event data or publish its raw snapshot.

@@ -74,12 +74,13 @@ that host, its disk, network, proxy and power; the demo is not a failover design
 
 ## Intended refactoring direction
 
-1. Explicit typed command/result contracts, bounded read APIs and database queries
-   for affected financial aggregates instead of full-event snapshots.
+1. Explicit typed command/result contracts. Command-specific queries and bounded
+   history are implemented; maintain their cent/replay and full-total invariants.
 2. Separate authentication, query and command modules; keep pure money rules
    independently testable. Split the UI by workflow and centralize recovery state.
 3. Inject a small database/repository contract and verify both adapters against it.
-4. Add constraints and indexes through reviewed migrations after checking old data.
+4. Extend constraints/indexes only through reviewed migrations after checking old
+   data; keep the new receipt/open-till uniqueness and restore epoch controls.
 
 Preserve financial behavior with invariants and failure tests before restructuring.
 A switch to a different database is a decision to benchmark and operate, not an

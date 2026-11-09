@@ -89,15 +89,17 @@ exports aid reconciliation but are not a supported database restore/import path.
    `PRAGMA integrity_check`, foreign keys, migrations, event/sale counts, operation
    records, seller totals and till balances against independent records.
 3. For cutover, move the stopped database **and any `-wal` / `-shm` files** aside
-   together. Put the consistent backup at `BASAR_DATABASE`, set correct ownership
-   and permissions, and start only the selected application revision.
+   together. Install the verified **restored copy produced by the restore helper**,
+   with its new epoch and paused writes; never install the raw unfenced snapshot.
+   Set correct ownership/permissions and start only the selected application revision.
 4. Keep devices blocked until the event manager reconciles acknowledged receipts
    newer than the backup and all uncertain/pending operations. Stale devices must
    not automatically replay against a restored database missing those records.
 5. Record recovered revision, backup timestamp, missing window, reconciled cash
    and authorization to resume. Keep the previous files until sign-off.
 
-The helper's reopen test does not constitute this full restore drill. The current restore helper adds a new instance epoch and pauses writes; old
+The helper's reopen test alone does not constitute a full restore drill. The
+current restore helper adds a new instance epoch and pauses writes; old
 clients remain fenced after explicit reconciliation/release. Follow the
 [restore procedure](monitoring-and-backups.md#actual-restore-and-tablet-cutover).
 This control does not recover receipts absent from the selected backup.
@@ -110,6 +112,8 @@ a newer schema; roll back using a compatible image/database pair with an explici
 reconciliation plan. Never blindly restore an old backup after sales have resumed.
 
 Monitor booking latency, errors/conflicts, unresolved operations, backup age,
-restarts, disk, memory and network. The protected dashboard and backup age/failure checks are implemented; the
+restarts, disk, memory and network. The protected dashboard and backup age/failure
+checks are implemented; the
 [monitoring guide](monitoring-and-backups.md) defines their scope. Durable financial
-metrics, external alerts and broader runtime fault coverage remain separate work. Do not log PINs, cookies or whole command bodies.
+metrics, external alerts and broader runtime fault coverage remain separate work.
+Do not log PINs, cookies or whole command bodies.

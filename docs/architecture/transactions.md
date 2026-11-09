@@ -6,16 +6,17 @@ controls below; actual tablet/venue acceptance and the other
 
 ## Server booking protocol
 
-1. Validate the operation ID. Look up its stored outcome and verify staff, event,
+1. Enforce the instance epoch/write pause, then validate the operation ID. Look up its stored outcome and verify staff, event,
    action and request fingerprint before returning it.
-2. Read the event revision and financial state; validate the command.
+2. Read the event revision and command-specific rows/aggregates; validate the command.
 3. Build one atomic batch claiming the observed revision. Successful commands
    store their financial effect, audit entry and `committed` operation result.
 4. Business rejections are also stored against the operation ID, guarded by the
    same event revision, as a `rejected` outcome with no financial/audit effect.
 5. All statements are guarded by `events.last_op = operationId`; the operation
    primary key prevents two outcomes for one ID. A failed batch rolls back.
-6. On contention, read fresh state and retry up to twelve internal attempts with bounded randomized delay.
+6. On contention, read fresh state and retry up to twelve internal attempts
+   with bounded randomized delay.
    Exhaustion returns `409 / CONCURRENT_WRITE`, not a recorded rejection.
 
 A stored rejection cannot later become a sale, even when another copy of the
@@ -92,7 +93,7 @@ See the [operator recovery procedure](../operations/register-recovery.md).
 
 ## Storage contracts and remaining limits
 
-Self-hosting uses `DatabaseSync`, WAL, foreign keys, a 5-second busy timeout and
+Self-hosting uses `DatabaseSync`, WAL, `synchronous=FULL`, foreign keys, a 5-second busy timeout and
 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` batches. SQLite allows one writer at a time;
 WAL does not create six parallel writers. See
 [SQLite transactions](https://sqlite.org/lang_transaction.html) and
@@ -103,11 +104,12 @@ The new recovery suite does not certify remote D1.
 Unclassified POST storage failures return `503 / OUTCOME_UNKNOWN`, without raw
 SQL errors. Only an explicit recorded outcome can release a pending financial
 command. Browser storage is not an off-device backup or a power-loss durability
-guarantee. The adapter does not explicitly set SQLite `synchronous`.
+guarantee. Explicit SQLite synchronous settings do not certify a particular
+host/storage power-loss recovery path.
 
 The aggregate-query cost, server contention envelope, disk/power failure and
 actual tablet OS suspension still need their
 own acceptance evidence. The [historical six-way conflict](../testing/results-2026-11-08.md)
 remains relevant: extra asynchronous fingerprint work can change scheduling,
 not prove contention impossible. New results are recorded
-[separately](../testing/results-2026-11-09.md).
+[separately](../testing/results-operations-2026-11-09.md).

@@ -134,6 +134,26 @@ pending basket or create a new ID to bypass the fence. A manager/technical revie
 must decide what cash was actually collected and what must be recovered.
 
 For a real incident, block device access and stop the application before replacing
-files; move the old database/WAL/SHM aside together. Reopen access only after the
+files; move the old database/WAL/SHM aside together. Install the **fenced restored
+copy**, never the raw original snapshot, at the active database path. Reopen access only after the
 cash lead has reconciled the missing interval and authorized cutover. Never run a
 restore against the active path or automatically replay devices into an old backup.
+
+
+The versioned operations directory also contains `restore.mjs`, `migrations.mjs`
+and `sqlite.mjs`. For server-side recovery, use this exact toolkit with the matching
+application image/migrations. Create the restored copy in a separate private
+staging mount with backups mounted read-only; do not mount the live database for
+that first step. After installing the verified paused copy and completing the
+cash reconciliation, the explicit release can run against the selected volume:
+
+```sh
+# Run only after the cash lead has authorized reconciliation/cutover.
+# Load the reviewed root-owned ops.env; never substitute an unrelated volume.
+sudo sh -c '. /etc/basarkasse/ops.env; docker run --rm --network none --read-only --cap-drop ALL --user 1000:1000 --mount "type=volume,source=$BASAR_BACKUP_VOLUME,target=/data" --mount "type=bind,source=$BASAR_OPS_CODE,target=/operations,readonly" "$BASAR_BACKUP_IMAGE" node /operations/restore.mjs release /data/basarkasse.sqlite --after-reconciliation RESTORED_EPOCH'
+```
+
+Replace `RESTORED_EPOCH` with the ID from that specific restore, keep device access
+blocked until release/verification, and then sign staff in again. This command
+updates only the pause flag for that epoch; it cannot make old pending commands
+valid. It is not a substitute for the financial reconciliation.

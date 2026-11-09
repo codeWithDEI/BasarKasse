@@ -34,7 +34,7 @@ access credential, 200 for the protected dashboard and manager health API, corre
 Secure session cookies and an initially green dashboard with fresh server/Mac
 backup evidence.
 
-Versioned backup tools at `a492fa83fb70746288c30127069ae262c57f7431` are mounted
+Versioned backup tools at `b856b3bc353f3f7951f5e1421469cb94047b3924` are mounted
 read-only into the separately limited utility container. Ubuntu systemd and the
 Mac LaunchAgent both run at five-minute intervals. The Mac requests a fresh
 snapshot before each pull, verifies it locally and returns a matching digest
@@ -51,15 +51,58 @@ epoch status lookup worked without making a financial change. The live database
 was not replaced. Separate operations tests verify old sessions are invalidated
 on the restored copy; no original backup is changed.
 
+The same versioned toolkit also produced an [isolated Ubuntu restored
+copy](restore-ubuntu-proof-2026-11-09.json): integrity passed, the 3 events,
+5 receipts, 1 payout, 14 operations and 15 audit rows were preserved, a new epoch
+was assigned and writes remained paused. Neither drill replaced the active volume.
+
 ## Ubuntu duration run
 
-A separate, no-network staging container is running the one-hour workload from
-`test-register-soak.mjs` against its own database and private scratch directory.
-The application revision and effective cgroup limits are recorded in the report.
-It starts with 10,000 receipts plus operation/audit history, six personal sessions
-and a final twelve-session reserve phase on six tills. Final duration, latency,
-reconciliation and restore/restart outcomes will be recorded after completion.
-Until then the duration test is **in progress**, not a passed capacity gate.
+The [one-hour Ubuntu workload](results-ubuntu-soak-2026-11-09.json) **passed** on
+9 November, 14:26–15:27 UTC, in a separate no-network container with its own
+database and private disk-backed scratch directory. The protected evaluation
+database was not used. The tested application revision is `4548c8a`, Node.js
+24.22.2 / SQLite 3.53.4, with effective cgroup limits of one CPU and 768 MiB.
+The portal remained running on the same host.
+
+The fixture started with 10,000 receipts plus operation/audit history. Six personal
+cashier sessions operated for 45 minutes, then twelve for 15 minutes, sharing six
+tills. Each active client submitted a five-item sale every ten seconds and read
+the compact state. Duplicate replays, manager movements/voids and online backups
+ran during traffic. Final settlement, restart and isolated restore checks were
+included in the total 3,624 measured seconds.
+
+| Measurement | Result |
+| --- | --- |
+| New sales / persisted receipts | 2,706 / 12,706 |
+| New sales in six-client / twelve-client phase | 1,625 / 1,081 |
+| Primary sale HTTP responses | 2,706 HTTP 200; no failures |
+| Duplicate replays / voids / cash movements | 277 / 29 / 238 |
+| Individual seller payouts / counted till closures | 150 / 6 |
+| Booking response p50 / p95 / p99 / maximum | 153.9 / 983.4 / 1,127.9 / 1,316 ms |
+| Compact-state refresh p95 | 670 ms |
+| Initial / final compact snapshot | 91,181 / 105,938 bytes |
+| Integrity, restart replay, paused restore and old-tablet fence | All passed |
+
+The p95 and p99 meet the proposed **server-response** thresholds for this workload.
+The p95 is close to one second; this is not evidence of unlimited spare capacity
+or a measured end-to-end tablet/WAN response time.
+
+The additional [independent Python ledger check](results-ubuntu-ledger-2026-11-09.json)
+uses a read-only post-closure snapshot and no application money helpers. It checked
+all 12,706 fixture receipts, 2,706 new command fingerprints, 29 voids, 238 movements,
+each of the 150 sellers' gross/commission/net amounts and all six cash balances.
+Net payouts were 5,429,947 cents and final cash was 1,081,613 cents. It also rejected
+deliberately offsetting one-cent payout errors on the same till, which would leave
+the combined cash total unchanged. No lost or duplicate financial effect or
+unexplained balance difference was found.
+
+[Resource observations](results-ubuntu-resources-2026-11-09.json) recorded a maximum
+observed cgroup lifetime memory peak of 400,539,648 bytes (382 MiB) against the
+768 MiB limit. Sampling began partway through the run and ended before shutdown;
+the figure is the maximum observed kernel peak, not a guarantee about every final
+instant. The driver and app share the measured budget. Both the workload and the
+independent checker exited successfully; their finite test containers are stopped.
 
 ## Limits that remain
 

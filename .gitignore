@@ -50,3 +50,7 @@ yarn-error.log*
 # Browser test artifacts (synthetic test data only)
 /test-results/
 /playwright-report/
+
+# Independent Python ledger checker
+__pycache__/
+*.py[cod]

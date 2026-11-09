@@ -12,7 +12,7 @@ Proposals remain proposals until implemented and verified in a reviewed change.
 | ADR-005 | Implemented | Same service on D1 or a SQLite adapter. Deployment-specific integration/durability tests remain necessary. |
 | ADR-006 | Evaluation topology | One self-hosted process, local volume, HTTPS proxy and separate protected demo. No high-availability claim. |
 | ADR-007 | Proposed | Typed command contracts and injected persistence interface; split UI/auth/query/booking modules with behavior preserved. |
-| ADR-008 | Proposed | Bounded/paginated reads and SQL financial aggregates, supported by constraints and indexes. Benchmark before/after. |
+| ADR-008 | Implemented; capacity acceptance open | Targeted command reads, 50-row keyset history and server financial aggregates, supported by unique constraints/indexes. Explicit exports remain full; recorded workload limits still apply. |
 | ADR-009 | Open | Choose the primary supported live runtime and operational owner. SQLite may suffice for six tills, but current evidence is incomplete. |
 | ADR-010 | Open | Decide license, external contribution policy, release maintainers and supported security contact. |
 
