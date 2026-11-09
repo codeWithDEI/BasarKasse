@@ -1,6 +1,6 @@
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync,existsSync,statSync,mkdirSync,copyFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,existsSync,statSync,mkdirSync,copyFileSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {openDatabase} from '../selfhost/sqlite.mjs';
@@ -21,6 +21,7 @@ function fixture(name) {
 test('online WAL backup contains a coherent receipt, is private, and never overwrites an existing backup',async()=>{
  const {path,db}=fixture('backup');const output=join(tmp,'backup-copy.sqlite');
  await backupDatabase(path,output);assert.equal(statSync(output).mode&0o777,0o600);assert.deepEqual(inspectDatabase(output).ledger.e,{sales:1,voids:0,goods:650,donations:50});
+ assert.equal(readdirSync(tmp).filter(name=>name.startsWith('backup-copy.sqlite')&&name!=='backup-copy.sqlite').length,0);
  const digest=await fileHash(output);await assert.rejects(()=>backupDatabase(path,output),/exists/);assert.equal(await fileHash(output),digest);db.close();
 });
 test('restore migrates only a separate copy, starts paused, changes epoch and keeps financial evidence intact',async()=>{

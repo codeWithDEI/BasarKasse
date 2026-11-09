@@ -10,7 +10,7 @@ export async function backupDatabase(source,destination) {
   if(existsSync(output))throw new Error('Backup destination already exists.');
   mkdirSync(dirname(output),{recursive:true,mode:0o700});
   const db=new DatabaseSync(input,{readOnly:true});
-  try{await backup(db,partial);chmodSync(partial,0o600);inspectDatabase(partial);linkSync(partial,output);}
+  try{await backup(db,partial);const copy=new DatabaseSync(partial);try{copy.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;');}finally{copy.close();}chmodSync(partial,0o600);inspectDatabase(partial);linkSync(partial,output);}
   finally{db.close();if(existsSync(partial))unlinkSync(partial);}
   return output;
 }

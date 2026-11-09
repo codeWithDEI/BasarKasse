@@ -5,4 +5,5 @@ exec docker run --rm --network none --read-only --cap-drop ALL --security-opt no
  --mount "type=volume,source=$BASAR_BACKUP_VOLUME,target=/data,readonly" \
  --mount "type=bind,source=$BASAR_OPS_ROOT/backups,target=/backups" \
  --mount "type=bind,source=$BASAR_OPS_ROOT/state,target=/state" \
- "$BASAR_BACKUP_IMAGE" node selfhost/ops-server.mjs snapshot
+ --mount "type=bind,source=$BASAR_OPS_CODE,target=/operations,readonly" \
+ "$BASAR_BACKUP_IMAGE" node /operations/ops-server.mjs snapshot
