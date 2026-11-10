@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "verifiedAt": "2026-11-10T21:12:36.682274+00:00",
+  "method": "Independent Python/SQLite read-only post-closure snapshot; fixture intents, command hashes, each seller and each till",
+  "results": {
+    "receiptsVerified": 10972,
+    "newCommandFingerprintsVerified": 972,
+    "voidsVerified": 1,
+    "movementsVerified": 8,
+    "individualSellerPayoutsVerified": 150,
+    "tillsVerified": 6,
+    "goodsCents": 6381000,
+    "donationCents": 54855,
+    "commissionCents": 957150,
+    "netPayoutCents": 5423360,
+    "roundingDonationCents": 490,
+    "poolContributionsVerified": 6,
+    "finalCashCents": 1072495,
+    "detectsCompensatingPayoutErrors": true
+  }
+}

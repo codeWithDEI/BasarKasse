@@ -7,7 +7,7 @@ The interface is German. Project documentation and contribution guidance are Eng
 **Status: protected evaluation / training only. Do not use this release to handle
 real event money.** Six tills are a design goal, not an approved operating capacity.
 See the [production readiness gates](docs/production-readiness.md) and
-[measured test results](docs/testing/results-operations-2026-11-09.md) before planning a live event.
+[measured test results](docs/testing/results-event-workflow-2026-11-10.md) before planning a live event.
 
 ## What it does
 
@@ -127,7 +127,8 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | [Transactions and recovery](docs/architecture/transactions.md) | Atomicity, concurrency, idempotency and failure cases |
 | [Architecture decisions](docs/architecture/decisions.md) | Existing decisions, trade-offs and proposed changes |
 | [Testing](docs/testing/README.md) | Reproducible checks and acceptance scenarios |
-| [Recorded results](docs/testing/results-operations-2026-11-09.md) | What was actually measured and what was not |
+| [Current workflow results](docs/testing/results-event-workflow-2026-11-10.md) | 68 regression / 50 browser checks, six-session load and independent pooled ledger |
+| [Earlier Ubuntu operations results](docs/testing/results-operations-2026-11-09.md) | Previous-workflow server/backup measurements and remaining gates |
 | [Deployment and recovery](docs/operations/deployment.md) | Configuration, migrations, backups and restore |
 | [Monitoring and backups](docs/operations/monitoring-and-backups.md) | Health dashboard, Ubuntu/Mac schedules and restore fencing |
 | [Register recovery](docs/operations/register-recovery.md) | Lock screen, Wi-Fi, same-person login and device rehearsal |

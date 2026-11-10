@@ -168,3 +168,7 @@ The HTTP/soak harnesses use synthetic runtime PIN keys, personal assigned accoun
 and fifty-cent prices. The soak closes all tills before pooled payouts and
 reauthenticates after restored sessions are invalidated. Do not supply real keys
 or target event data to these disposable fixtures.
+
+See the [10 November results](results-event-workflow-2026-11-10.md) for 68 Node
+tests, 50 browser cases, the repeated 600-sale HTTP check and the local 130-second
+pool/independent-ledger run. Its macOS figures are not intended-server acceptance.

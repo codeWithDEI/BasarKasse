@@ -1,0 +1,72 @@
+{
+  "status": "passed",
+  "startedAt": "2026-11-10T21:10:11.554Z",
+  "workload": {
+    "seconds": 130,
+    "seededSales": 10000,
+    "primaryClients": 6,
+    "reserveClients": 12,
+    "realTills": 6,
+    "cadenceMs": 1000,
+    "itemsPerSale": 5
+  },
+  "runtime": {
+    "node": "v22.23.2",
+    "sqlite": "3.53.4",
+    "platform": "darwin",
+    "revision": "6d9a03e"
+  },
+  "initialSnapshotBytes": 94321,
+  "finishedAt": "2026-11-10T21:12:38.939Z",
+  "results": {
+    "statuses": {
+      "200": 972
+    },
+    "measuredSeconds": 144,
+    "newSales": 972,
+    "phaseSixSales": 588,
+    "phaseTwelveSales": 384,
+    "persistedSales": 10972,
+    "duplicateReplays": 103,
+    "voids": 1,
+    "movements": 8,
+    "payoutCount": 150,
+    "payoutCents": 5423360,
+    "payoutRoundingCents": 490,
+    "poolBalance": 1072495,
+    "postMs": {
+      "p50": 25.4,
+      "p95": 69.2,
+      "p99": 77.6,
+      "max": 123
+    },
+    "refreshP95Ms": 60.9,
+    "finalSnapshotBytes": 109436,
+    "integrity": "ok",
+    "restartReplay": true,
+    "restorePaused": true,
+    "oldTabletFence": true,
+    "restoredSessionsInvalidated": true,
+    "independentTillBalances": {
+      "dca2cdf8-2983-4469-96c9-af64f1ec2f76": 981140,
+      "27acaf25-5993-4e5f-b25d-0eb1af40e45b": 1022145,
+      "5671f596-fe8a-4bea-a820-7e1afc459978": 1062645,
+      "ba0d32d3-22c2-4029-9cb4-a8bd82148039": 1103145,
+      "3edf6e88-9459-4d5c-8616-7fa5026eeffa": 1143140,
+      "50bb8ccd-5cf5-45df-bb71-7e91bbf6a24a": 1183640
+    }
+  },
+  "limitations": [
+    "Synthetic HTTP clients; no physical tablets, WLAN or HTTPS proxy",
+    "Driver and app share the available runtime resources; see cgroup limits where recorded",
+    "Six tills; six active clients followed by twelve reserve clients",
+    "Clock duration and response targets are evidence for this workload only; organizer forecast and physical acceptance remain open"
+  ],
+  "progress": {
+    "newSales": 972,
+    "duplicateReplays": 103,
+    "voids": 1,
+    "updatedAt": "2026-11-10T21:12:38.940Z"
+  },
+  "executionContext": "Local macOS without container CPU/memory quotas; resource-description metadata clarified, numeric results unchanged"
+}
