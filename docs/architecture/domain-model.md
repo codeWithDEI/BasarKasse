@@ -1,95 +1,103 @@
 # Domain and data model
 
-## Financial rules
+## Prices and financial rules
 
-All persisted amounts are integer euro cents. Commission is integer basis points:
-`1500 = 15%`. For each seller, sum items from non-voided sales, then calculate:
+Persist amounts as integer euro cents and commission in basis points (`1500 = 15%`).
+New articles must cost positive multiples of 50 cents, at most EUR 10,000. Article
+input uses tenths of euros: `5` = EUR 0.50, `25` = EUR 2.50. Received cash, counts,
+floats and movements retain normal euro input. Validation also runs on the server.
+
+For each seller, sum active items before calculating:
 
 ```text
 commission = floor((sellerGross * rate + 5000) / 10000)
-sellerNet  = sellerGross - commission
-salePayable = goodsTotal + donation
+unroundedNet = sellerGross - commission
+roundingDonation = unroundedNet % 10        # new pooled events
+sellerNet = unroundedNet - roundingDonation
+salePayable = goodsTotal + checkoutDonation
 change = received - salePayable
-expectedTill = opening + activeSalePayables + signedMovements - sellerPayouts
+expectedTill = opening + activeSalePayables + signedTillMovements
 ```
 
-Do not sum the `received` field as revenue: change has been handed back.
-Donations belong to the association; they do not increase seller gross or
-commission. A full void reverses goods and donation in the original till.
-A void is rejected if that till is closed, cash is insufficient, or an affected
-seller has already been paid. Partial refunds are not implemented.
+Payout rounding is separate from commission and checkout donations. Payouts
+snapshot all components with `gross = commission + rounding + net`. Received cash
+is not revenue: change is returned. A full void reverses goods and checkout tips
+in the original open till. It is refused after closure or a seller payout.
 
-A payout snapshots gross, commission and net. One payout per seller/event is
-protected by a unique database index. Deposits and withdrawals need a reason;
-a withdrawal cannot make the computed till balance negative. Count differences
-at closure need a note. The software cannot verify physical cash or prevent a
-cashier from entering the same physical article again under a new item ID.
+## Counted cash and pooled settlement
 
-## Event lifecycle
+New events have `settlement_mode = 'pool'`:
+
+1. End sales; no new sales or till openings can commit.
+2. Count/close every opened till. Explain count differences. Closure and its one
+   **entire counted amount** pool contribution commit atomically.
+3. Pay sellers from the event pool after all opened tills close. Payouts and pool
+   movements serialize through the event revision and cannot overdraw cash.
+
+```text
+poolCash = countedTillContributions + signedPoolMovements - pooledPayouts
+```
+
+Floats are included in counted contents. Return them through an audited pool
+withdrawal; never subtract them twice or classify them as sales. Actual counts
+may differ from expected amounts, so the pool uses counted cash. Final association
+cash reflects commission, checkout tips, payout rounding, movements and differences.
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Open: Create training event
-  Open --> Settlement: Manager ends sales
-  Settlement --> Closed: All tills closed and all seller claims paid
+flowchart LR
+  Sales[End sales] --> Count[Count and close all opened tills]
+  Count --> Pool[One contribution per till]
+  Pool --> Payout[Pay each seller once]
+  Payout --> Close[Close event after all claims are paid]
 ```
 
-Sales require `open`; payouts require `settlement`. Reopening a closed event is
-not supported. Settings (commission, seller range, till count) lock after the
-first till opens. A till session is a cash container; an authenticated staff
-account is a separate identity. A till number may have successive sessions,
-but the application prevents two simultaneously open sessions for that number.
-The schema does not yet enforce that latter invariant independently.
+Existing events keep `settlement_mode = 'till'`: their cent-exact claims and
+till-funded payouts remain unchanged. New events always use pool policy. Never
+relabel historical events or recalculate already recorded financial outcomes.
 
-## Authorization matrix
+## Authentication and authorization
 
-| Action | Cashier | Manager |
-| --- | --- | --- |
-| Read full authenticated event snapshot | Yes, currently | Yes |
-| Open a till and record sales | Yes | Yes |
-| Void, deposit/withdraw, payout, close till | No | Yes |
-| Change/create event, end sales, close event | No | Yes |
-| Add staff | No | Yes |
+A cashier is assigned one event and till **number**. A person is an identity; a
+till is a cash container. An event manager can manage its own event/team. The
+unbound central setup manager can create events. Public demo accounts remain
+protected evaluation fixtures.
 
-Any authenticated cashier can currently book against any open till in the
-selected event; there is no exclusive device/staff assignment enforced on the
-server. Decide whether that matches event operations. Read permissions need a
-separate review; manager-only UI tabs do not restrict the GET snapshot.
+| Capability | Cashier | Event manager | Central setup manager |
+| --- | --- | --- | --- |
+| Event selection | Assigned | Assigned | All |
+| Till / checkout | Assigned number | Event tills | Selected event |
+| History, totals, full export | Assigned till | Own event | Selected event |
+| Seller claims, pool, audit | No | Own event | Selected event |
+| Team/PIN management | No | Own event | Selected event; can assign legacy unassigned cashiers |
+| Create another event | No | No | Yes |
 
-## Persisted entities
+Read filters run in SQL for receipts, searches, exports and totals. Commands and
+operation lookup enforce event/till scope too. Recoverable PINs appear only in an
+explicit manager team response, never normal snapshots. See the
+[PIN key and operator workflow](../operations/event-teams-and-settlement.md).
 
-```mermaid
-erDiagram
-  EVENTS ||--o{ TILL_SESSIONS : contains
-  EVENTS ||--o{ SALES : records
-  TILL_SESSIONS ||--o{ SALES : receives
-  EVENTS ||--o{ PAYOUTS : settles
-  TILL_SESSIONS ||--o{ PAYOUTS : funds
-  TILL_SESSIONS ||--o{ MOVEMENTS : adjusts
-  STAFF ||--o{ SESSIONS : authenticates
-```
+Team edits preserve IDs, increment `auth_version`, revoke sessions and record
+an audit/outcome atomically. Financial commit and login session-issuance guards
+reject work prepared under an old authorization, including concurrent PIN resets.
+Resolve open tablet work before changing scope or disabling a person.
 
-| Table | Role / key constraint |
+## Entities and invariants
+
+| Entity | Responsibility / constraint |
 | --- | --- |
-| `events` | Configuration, lifecycle, optimistic `version` and `last_op` |
-| `till_sessions` | Opening float, closure count, expected amount and note |
-| `sales` | Immutable initial receipt/items JSON plus void metadata; event-wide number |
-| `payouts` | Seller settlement; unique `(event_id, seller)` |
-| `movements` | Signed cash movement and reason |
-| `staff`, `sessions`, `login_limits` | PIN hash/role, expiring session, account attempt counter |
-| `audit` | Human-readable activity history, not a tamper-proof ledger |
-| `operations` | Unique operation ID, scope/fingerprint, committed or rejected outcome and stored result |
-| `__basar_migrations` | Self-hosted applied-migration filenames |
+| `events` | Lifecycle, settlement policy, revision and last operation |
+| `staff` | Identity, login hash/encrypted display PIN, scope and authorization version |
+| `sessions`, `login_limits` | Expiring session and account attempt counter |
+| `till_sessions` | Float/count/expectation; unique open event/number |
+| `sales` | Receipt/items plus void metadata; unique event receipt number |
+| `pool_entries` | Counted contribution or signed movement; one contribution per till |
+| `payouts` | Unique event/seller; pool funding has no till; accounting/funding checks |
+| `movements` | Signed change to an open till |
+| `audit`, `operations` | Atomic activity and immutable operation outcome |
+| `instance_state` | Restore epoch and write pause |
+| `__basar_migrations` | Applied self-hosted SQL filenames |
 
-Sales store stable staff ID and display name. Several other records store only
-a staff name; stable actor attribution is incomplete. Event/staff/action links
-in audit/operation records are not all foreign keys. Commission/net/balance
-rules are largely service-level checks, not database CHECK constraints.
-
-## Integrity work still required
-
-Add reviewed constraints for event receipt numbers and open till numbers; add
-indexes for event-scoped reads and joins. Validate existing rows before applying
-uniqueness constraints. Consider safe-integer bounds on aggregate totals, explicit
-status/role enums and stable actor IDs for every financial action. Preserve
-history and operation records when introducing retention or archival jobs.
+Historical names/financial records survive team edits. Some legacy audit/movement
+rows lack stable actor IDs; new pool entries include ID and name. The database
+cannot verify cash physically, identify repeated physical articles without an
+article ID, or replace operator reconciliation.

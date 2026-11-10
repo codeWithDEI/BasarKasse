@@ -40,7 +40,8 @@ The existing account-based attempt limit remains enforced.
 
 Use **Andere Person** to change a remembered selection before login, or the profile
 button to change staff deliberately. An unsubmitted basket is preserved during a
-person change; the eventual sale is attributed to the person who submits it.
+person change within the same scope; a different assignment requires original-scope
+review rather than moving the purchase; the eventual sale is attributed to the person who submits it.
 Once a command has been sent, only its original person can reconcile it. If that
 person is unavailable, pause the till and involve the technical/cash lead.
 At the end of a shift use the profile button and **Abmelden**, and keep the tablet
@@ -81,7 +82,7 @@ available again; its stored draft/pending command is then restored.
 Use only a synthetic event, individual test accounts and a written expected ledger.
 For every device record model, OS, browser version, URL and result:
 
-- Enter seller 42 / EUR 6.50, round to EUR 7.00, receive EUR 10.00. Lock/unlock
+- Enter seller 42 / price `65` (EUR 6.50), round to EUR 7.00, receive EUR 10.00. Lock/unlock
   before submission; restore the draft and verify partial entry fields.
 - Submit, immediately lock, unlock after 30 seconds; confirm one stored sale and
   EUR 3.00 change. Repeat with at least a five-minute lock.
@@ -104,6 +105,15 @@ with `pnpm run test:recovery`; physical Wi-Fi switching alone cannot guarantee
 which side of commit was interrupted. Independently count sales, operation IDs,
 amounts, donations, change, audit effects and till balances after each scenario.
 A successful rehearsal closes only its measured gates, not all production risks.
+
+## Assigned login and input upgrade
+
+See [event teams and settlement](event-teams-and-settlement.md). Personal links
+preselect name/event on an idle tablet. Cashiers cannot change event/till. If the
+wrong account is signed in, **Ursprüngliche Anmeldung laden** returns to the original
+login without clearing open work. Team edits revoke sessions; resolve reassigned
+scope with the manager before recovery. Old euro input drafts migrate to tenths;
+cent-valued baskets and commands retain their contents.
 
 ## Upgrade and restore precautions
 

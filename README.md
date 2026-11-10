@@ -11,12 +11,14 @@ See the [production readiness gates](docs/production-readiness.md) and
 
 ## What it does
 
-- Multiple events, numbered tills, personal PIN sessions and cashier/manager roles.
+- Multiple events, personal event/till-bound cashier logins and event-scoped teams.
 - Twelve-hour sessions survive tablet sleep; remembered staff need only their PIN
   to log back in. Pending work always requires its original person.
 - Manual baskets, cash received, change and optional donations through rounding up.
-- Integer-cent accounting; commission rounded once per seller, excluding donations.
-- Full-sale voids, deposits, withdrawals, seller payouts and counted till closure.
+- Fifty-cent article prices without comma (`5` = EUR 0.50, `25` = EUR 2.50).
+- Integer-cent accounting; separate commission, tips and ten-cent payout rounding.
+- Full-sale voids, counted till closure into a cash pool, movements and seller payouts.
+- Editable event teams, manager PIN display, personal login links and session revocation.
 - Central persistence, operation IDs for replay protection, atomic booking batches.
 - Indexed command reads, database-enforced receipt/open-till uniqueness and paged
   sale history with whole-event totals.
@@ -27,8 +29,7 @@ See the [production readiness gates](docs/production-readiness.md) and
   wake/reconnect reconciles the original operation. **This is not offline checkout.**
 
 There is no physical article inventory, partial refund workflow, payment terminal,
-TSE integration or fiscal export. Account disablement, PIN changes and session
-revocation are not exposed through the interface. Default training accounts and
+TSE integration or fiscal export. Default training accounts and
 training login remain enabled. Do not mistake a newly created event for a production mode.
 
 ## Quick start: local evaluation
@@ -44,6 +45,9 @@ pnpm run build:selfhost
 BASAR_PUBLIC_ORIGIN=http://127.0.0.1:3000 HOSTNAME=127.0.0.1 PORT=3000 BASAR_DATABASE=./data/basarkasse.sqlite pnpm run start:selfhost
 ```
 
+For team creation/reset and encrypted PIN display, configure the stable runtime
+`BASAR_TEAM_PIN_KEY` using the [team and settlement guide](docs/operations/event-teams-and-settlement.md).
+
 Open [the local application](http://127.0.0.1:3000). Select **Anmelden & Kasse
 öffnen**, expand **Übungsrollen anzeigen**, then choose **Übung als Kassenleitung**
 or **Übung als Kassiererin**. Both demo
@@ -51,7 +55,10 @@ accounts use PIN `1234`. They are intentionally public training credentials.
 
 A fresh database seeds an example event: 150 sellers, three tills and 15% commission.
 Create a separate synthetic event with six tills **before opening its first till**
-when evaluating the intended setup. Settings lock once a till has been opened.
+when evaluating the intended setup. Add personal accounts for that event and each
+till. The public demo cashier is fixed to the example event, till 1. New events
+use pool/ten-cent settlement; historical events retain till/cent policy. Settings
+lock after the first till opens.
 
 For a faster UI edit cycle against the same self-hosted SQLite adapter:
 
@@ -114,6 +121,7 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | --- | --- |
 | [Contributing](CONTRIBUTING.md) | Setup, change workflow, review and validation |
 | [Architecture overview](docs/architecture/overview.md) | Components, deployment choices and boundaries |
+| [Teams and pooled settlement](docs/operations/event-teams-and-settlement.md) | PIN key, assigned login, counts and rounding |
 | [Domain and data model](docs/architecture/domain-model.md) | Money, event lifecycle, roles and schema |
 | [Queries and database invariants](docs/architecture/queries-and-invariants.md) | Indexed validation, bounded history and restore epochs |
 | [Transactions and recovery](docs/architecture/transactions.md) | Atomicity, concurrency, idempotency and failure cases |
@@ -137,8 +145,7 @@ and connector tooling. `examples/` is not the cash-register implementation.
 
 ## Project decisions still required
 
-Maintainers must select a license, contribution ownership policy and release
-maintainers before opening the project for general external collaboration.
-No project-wide license has been selected in this repository; bundled third-party
-license notices do not settle that decision. Agree the organizer's accounting,
-data retention and applicable cash-register requirements before approving live use.
+The project is licensed under **GPL-3.0-only**; see [LICENSE](LICENSE) and
+[third-party attribution](NOTICE.md). Maintainers still need contribution ownership,
+release maintainers and security response contacts. Agree the organizer's accounting,
+data retention and applicable cash-register requirements before live approval.

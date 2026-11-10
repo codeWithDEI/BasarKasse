@@ -10,7 +10,11 @@ await build({configFile:false,logLevel:'error',build:{lib:{entry:resolve('lib/ba
 const {bootstrap,mutate,readState,readRegisterState,login,auth}=await import(join(tmp,'service.mjs'));
 const db=openDatabase(':memory:');globalThis.__basarDB=db;for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())db.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));await bootstrap();
 const manager={id:'demo-leitung',name:'Kassenleitung',role:'manager'},cashier={id:'demo-kasse',name:'Kassiererin',role:'cashier'};
-const eventId='demo-fruehjahr';const cmd=(action,p={},user=manager)=>mutate(action,{operationId:crypto.randomUUID(),eventId,...p},user);
+// Preserve the deployed till/cent policy as an explicit legacy fixture. New policy is tested in event-workflow.test.mjs.
+process.env.BASAR_TEAM_PIN_KEY='b6'.repeat(32); // Synthetic test key.
+db.sqlite.prepare("UPDATE events SET settlement_mode='till'").run();
+const eventId='demo-fruehjahr';const cmd=async(action,p={},user=manager)=>{const result=await mutate(action,{operationId:crypto.randomUUID(),eventId,...p},user);if(action==='createEvent')db.sqlite.prepare("UPDATE events SET settlement_mode='till' WHERE id=?").run(result.eventId);return result;};
+const cashierFor=(id,number=1)=>{if(id===eventId)return {...cashier,event_id:id,till_number:1,auth_version:0};const key='fixture-cashier-'+id;db.sqlite.prepare("INSERT OR IGNORE INTO staff(id,name,role,pin_hash,event_id,till_number) SELECT ?,'Legacy fixture cashier','cashier',pin_hash,?,? FROM staff WHERE id='demo-kasse'").run(key,id,number);return {id:key,name:'Legacy fixture cashier',role:'cashier',event_id:id,till_number:number,auth_version:0};};
 let tillId;
 after(()=>{db.close();rmSync(tmp,{recursive:true,force:true})});
 test('PIN-Anmeldung erzeugt eine geschützte Sitzung',async()=>{const r=new Request('https://example.test');await assert.rejects(()=>login(manager.id,'0000',r),/PIN/);const token=await login(manager.id,'1234',r);assert.equal((await auth(new Request('https://example.test',{headers:{cookie:'basar_session='+token}}))).role,'manager')});
@@ -25,7 +29,7 @@ test('sessions survive inactivity for the shift, expire at twelve hours, and sti
  } finally {db.sqlite.prepare('UPDATE staff SET disabled=0 WHERE id=?').run(cashier.id);clock.mock.restore();}
 });
 test('Die Kassenleitung kann eine Kasse mit Wechselgeld öffnen',async()=>{const result=await cmd('openTill',{number:1,opening:10000});tillId=result.tillId;assert.equal((await readState(eventId,manager)).tills[0].opening,10000);await assert.rejects(()=>cmd('openTill',{number:1,opening:10000}),/bereits geöffnet/)});
-test('Identischer Verkauf wird auch bei gleichzeitigem Senden genau einmal gebucht',async()=>{const p={operationId:crypto.randomUUID(),eventId,tillId,items:[{id:crypto.randomUUID(),seller:42,price:1000},{id:crypto.randomUUID(),seller:7,price:250}],received:2000};const r=await Promise.all([mutate('sale',p,cashier),mutate('sale',p,cashier)]);assert.equal(r[0].saleId,r[1].saleId);assert.equal(r[0].change,750);const state=await readState(eventId,manager);assert.equal(state.sales.length,1);assert.equal(state.sales[0].total,1250)});
+test('Identischer Verkauf wird auch bei gleichzeitigem Senden genau einmal gebucht',async()=>{const p={operationId:crypto.randomUUID(),eventId,tillId,items:[{id:crypto.randomUUID(),seller:42,price:1000},{id:crypto.randomUUID(),seller:7,price:250}],received:2000};const r=await Promise.all([mutate('sale',p,cashierFor(p.eventId)),mutate('sale',p,cashierFor(p.eventId))]);assert.equal(r[0].saleId,r[1].saleId);assert.equal(r[0].change,750);const state=await readState(eventId,manager);assert.equal(state.sales.length,1);assert.equal(state.sales[0].total,1250)});
 test('Zwei verschiedene parallele Verkäufe bleiben beide erhalten',async()=>{await Promise.all([cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:1,price:100}],received:100},cashier),cmd('sale',{tillId,items:[{id:crypto.randomUUID(),seller:2,price:200}],received:200},cashier)]);const s=await readState(eventId,manager);assert.equal(s.sales.length,3);assert.equal(new Set(s.sales.map(s=>s.number)).size,3)});
 test('Kassiererinnen können weder auszahlen noch Einstellungen oder Geldbewegungen ändern',async()=>{for(const action of ['payout','eventStatus','updateEvent','movement','closeTill','addStaff','createEvent','void'])await assert.rejects(()=>cmd(action,{},cashier),/vorbehalten/)});
 test('Storno ist nachvollziehbar und wird genau einmal ausgeführt',async()=>{const state=await readState(eventId,manager);const s=state.sales.find(s=>s.total===100);await cmd('void',{saleId:s.id,reason:'Fehler bei der Eingabe'});await assert.rejects(()=>cmd('void',{saleId:s.id,reason:'Noch einmal'}),/bereits storniert/);assert.ok((await readState(eventId,manager)).sales.find(x=>x.id===s.id).voided_at)});
@@ -39,7 +43,7 @@ test('Aufrunden von 6,50 auf 7 Euro: persistenter Betrag, Rückgeld, Storno und 
  const id=created.eventId;const run=(action,p={})=>cmd(action,{eventId:id,...p});
  const {tillId:cash}=await run('openTill',{number:1,opening:10000});
  const payload={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation:50,received:1000};
- const results=await Promise.all([mutate('sale',payload,cashier),mutate('sale',payload,cashier)]);
+ const results=await Promise.all([mutate('sale',payload,cashierFor(payload.eventId)),mutate('sale',payload,cashierFor(payload.eventId))]);
  assert.equal(results[0].saleId,results[1].saleId);assert.equal(results[0].total,650);assert.equal(results[0].donation,50);assert.equal(results[0].payable,700);assert.equal(results[0].change,300);
  let s=await readState(id,manager);assert.equal(s.sales.length,1);assert.equal(s.sales[0].donation,50);assert.equal(s.sales[0].received,1000);
  for(const donation of [-1,0.5,'50',1000001])await assert.rejects(()=>run('sale',{tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation,received:1000}),/Aufrundung/);
@@ -72,7 +76,7 @@ test('Storno verlangt verfügbares Bargeld einschließlich Trinkgeld und bleibt 
 });
 
 test('Ein geänderter Client-IP-Header umgeht die kontobezogene Anmeldesperre nicht',async()=>{
- const id=crypto.randomUUID();await cmd('addStaff',{operationId:id,name:'Loginbegrenzung Test',pin:'5826',role:'cashier'});
+ const target=await cmd('createEvent',{name:'Login limits event',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});const id=crypto.randomUUID();await cmd('addStaff',{eventId:target.eventId,operationId:id,name:'Loginbegrenzung Test',pin:'5826',role:'cashier',tillNumber:1});
  for(let n=0;n<10;n++)await assert.rejects(()=>login(id,'0000',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.10'}})),/PIN/);
  await assert.rejects(()=>login(id,'5826',new Request('https://example.test',{headers:{'CF-Connecting-IP':'192.0.2.11'}})),e=>e.status===429);
 });
@@ -82,12 +86,12 @@ test('operation lookup verifies command contents, actor, event and action',async
  const {eventId:id}=await cmd('createEvent',{name:'Recovery identity',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
  const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
  const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],donation:50,received:1000};
- assert.equal((await operationStatus('sale',p,cashier)).state,'not_found');
- const first=await mutate('sale',p,cashier);
- assert.deepEqual((await operationStatus('sale',p,cashier)).result,first);
- for(const changed of [{...p,received:2000},{...p,donation:100},{...p,eventId:'demo-fruehjahr'}])await assert.rejects(()=>mutate('sale',changed,cashier),e=>e.code==='OPERATION_MISMATCH');
- await assert.rejects(()=>operationStatus('sale',p,manager),e=>e.code==='OPERATION_MISMATCH');
- await assert.rejects(()=>operationStatus('void',p,cashier),e=>e.code==='OPERATION_MISMATCH');
+ assert.equal((await operationStatus('sale',p,cashierFor(p.eventId))).state,'not_found');
+ const first=await mutate('sale',p,cashierFor(p.eventId));
+ assert.deepEqual((await operationStatus('sale',p,cashierFor(p.eventId))).result,first);
+ for(const changed of [{...p,received:2000},{...p,donation:100},{...p,eventId:'demo-fruehjahr'}])await assert.rejects(()=>mutate('sale',changed,cashierFor(p.eventId)),e=>['OPERATION_MISMATCH','SCOPE_MISMATCH'].includes(e.code));
+ await assert.rejects(()=>operationStatus('sale',p,manager),e=>['OPERATION_MISMATCH','SCOPE_MISMATCH'].includes(e.code));
+ await assert.rejects(()=>operationStatus('void',p,cashierFor(p.eventId)),e=>['OPERATION_MISMATCH','SCOPE_MISMATCH'].includes(e.code));
  assert.equal((await readState(id,manager)).sales.length,1);
 });
 test('a recorded rejection cannot later turn into a successful sale under the same ID',async()=>{
@@ -95,10 +99,10 @@ test('a recorded rejection cannot later turn into a successful sale under the sa
  const {eventId:id}=await cmd('createEvent',{name:'Durable rejection',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
  const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
  const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:100};
- await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
- assert.equal((await operationStatus('sale',p,cashier)).state,'rejected');
- await assert.rejects(()=>mutate('sale',{...p,received:1000},cashier),e=>e.code==='OPERATION_MISMATCH');
- await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ await assert.rejects(()=>mutate('sale',p,cashierFor(p.eventId)),e=>e.recorded===true);
+ assert.equal((await operationStatus('sale',p,cashierFor(p.eventId))).state,'rejected');
+ await assert.rejects(()=>mutate('sale',{...p,received:1000},cashier),e=>['OPERATION_MISMATCH','SCOPE_MISMATCH'].includes(e.code));
+ await assert.rejects(()=>mutate('sale',p,cashierFor(p.eventId)),e=>e.recorded===true);
  assert.equal((await readState(id,manager)).sales.length,0);
 });
 test('legacy sale replay compares the original receipt when no request hash exists',async()=>{
@@ -106,21 +110,21 @@ test('legacy sale replay compares the original receipt when no request hash exis
  const {eventId:id}=await cmd('createEvent',{name:'Legacy recovery',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
  const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
  const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
- const result=await mutate('sale',p,cashier);db.sqlite.prepare('UPDATE operations SET request_hash=NULL WHERE id=?').run(p.operationId);
- assert.deepEqual((await operationStatus('sale',p,cashier)).result,result);
- await assert.rejects(()=>operationStatus('sale',{...p,received:2000},cashier),e=>e.code==='OPERATION_MISMATCH');
+ const result=await mutate('sale',p,cashierFor(p.eventId));db.sqlite.prepare('UPDATE operations SET request_hash=NULL WHERE id=?').run(p.operationId);
+ assert.deepEqual((await operationStatus('sale',p,cashierFor(p.eventId))).result,result);
+ await assert.rejects(()=>operationStatus('sale',{...p,received:2000},cashierFor(p.eventId)),e=>['OPERATION_MISMATCH','SCOPE_MISMATCH'].includes(e.code));
 });
 test('sale replay racing end-of-sales has one durable outcome and no partial booking',async()=>{
  const {operationStatus}=await import(join(tmp,'service.mjs'));
  const {eventId:id}=await cmd('createEvent',{name:'Phase and reply race',date:'2027-03-13',commission:1500,sellerMin:1,sellerMax:150,tillCount:1});
  const {tillId:cash}=await cmd('openTill',{eventId:id,number:1,opening:10000});
  const p={operationId:crypto.randomUUID(),eventId:id,tillId:cash,items:[{id:crypto.randomUUID(),seller:42,price:650}],received:1000};
- await Promise.allSettled([cmd('eventStatus',{eventId:id,status:'settlement'}),...Array.from({length:6},()=>mutate('sale',p,cashier))]);
- const outcome=await operationStatus('sale',p,cashier);assert.notEqual(outcome.state,'not_found');
+ await Promise.allSettled([cmd('eventStatus',{eventId:id,status:'settlement'}),...Array.from({length:6},()=>mutate('sale',p,cashierFor(p.eventId)))]);
+ const outcome=await operationStatus('sale',p,cashierFor(p.eventId));assert.notEqual(outcome.state,'not_found');
  const s=await readState(id,manager);assert.equal(s.sales.length,outcome.state==='committed'?1:0);
  assert.equal(db.sqlite.prepare('SELECT count(*) n FROM operations WHERE id=?').get(p.operationId).n,1);
- if(outcome.state==='committed')assert.deepEqual(await mutate('sale',p,cashier),outcome.result);
- else await assert.rejects(()=>mutate('sale',p,cashier),e=>e.recorded===true);
+ if(outcome.state==='committed')assert.deepEqual(await mutate('sale',p,cashierFor(p.eventId)),outcome.result);
+ else await assert.rejects(()=>mutate('sale',p,cashierFor(p.eventId)),e=>e.recorded===true);
 });
 
 test('the recovery migration preserves pre-upgrade operation results',()=>{

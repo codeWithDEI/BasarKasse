@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyRegister,loadRegister,saveRegister,confirmedRegister,registerKey} from '../lib/basar/register.ts';
+import {emptyRegister,loadRegister,saveRegister,confirmedRegister,registerKey,canResubmitPending} from '../lib/basar/register.ts';
 const key=registerKey('');
-const command={action:'sale',operationId:'operation-123',eventId:'event-123',staffId:'cashier-123',tillId:'till-123',items:[{id:'item-123',seller:42,price:650}],received:1000,donation:50};
+const command={entryFormat:'tenths-v1',action:'sale',operationId:'operation-123',eventId:'event-123',staffId:'cashier-123',tillId:'till-123',items:[{id:'item-123',seller:42,price:650}],received:1000,donation:50};
 const receipt={saleId:'sale-123',number:1,total:650,donation:50,received:1000,change:300,payable:700};
 const storage=()=>{const values=new Map<string,string>();return {values,getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);}};};
 test('crash before or after the single acknowledgement write recovers either pending command or receipt, never a stale cart',()=>{
@@ -42,4 +42,35 @@ test('existing v2 register records acquire only an empty remembered identity and
  const s=storage();const record={...emptyRegister(),eventId:command.eventId,items:command.items,pending:command};
  const {lastStaffId,...legacy}=record;s.setItem(key,JSON.stringify(legacy));
  assert.deepEqual(loadRegister(s,key),{...legacy,lastStaffId:''});
+});
+
+test('legacy euro price drafts migrate once to tenths without changing basket cents, command or receipt identity',()=>{
+ for(const [old,expected] of [['25','250'],['6,50','65'],['0,29','2.9']]){
+  const s=storage(),record={...emptyRegister(),eventId:command.eventId,items:command.items,pending:command,price:old};
+  const {priceUnit,...legacy}=record;s.setItem(key,JSON.stringify(legacy));
+  const upgraded=loadRegister(s,key);assert.equal(upgraded.price,expected);assert.equal(upgraded.priceUnit,'tenths');assert.deepEqual(upgraded.pending,command);assert.deepEqual(upgraded.items,command.items);
+  assert.equal(loadRegister(s,key).price,expected);assert.equal(JSON.parse(s.getItem(key)!).pending.operationId,command.operationId);
+ }
+});
+
+test('failure persisting the input-format upgrade keeps old evidence intact and prevents adopting a new register',()=>{
+ const s=storage(),{priceUnit,...legacy}={...emptyRegister(),price:'25'};s.setItem(key,JSON.stringify(legacy));
+ assert.throws(()=>loadRegister({...s,setItem:()=>{throw new Error('QuotaExceededError')}},key),/Quota/);
+ assert.equal(JSON.parse(s.getItem(key)!).price,'25');assert.equal(JSON.parse(s.getItem(key)!).priceUnit,undefined);
+});
+
+test('an original legacy pending command gets separate provenance without changing its immutable financial payload',()=>{
+ const s=storage(),{entryFormat,...legacyCommand}=command;
+ const {priceUnit,...legacy}={...emptyRegister(),eventId:command.eventId,pending:legacyCommand,items:command.items,price:'25'};
+ s.setItem(key,JSON.stringify(legacy));const loaded=loadRegister(s,key);
+ assert.deepEqual(loaded.pending,legacyCommand);assert.equal(loaded.validatedPendingId,command.operationId);assert.equal(canResubmitPending(loaded),true);
+ assert.equal(canResubmitPending(loadRegister(s,key)),true);
+});
+
+test('an obsolete client cannot make an unmarked or changed-ID command eligible for blind resubmission after the input upgrade',()=>{
+ const {entryFormat,...oldCommand}=command,record={...emptyRegister(),eventId:command.eventId,pending:oldCommand,items:command.items};
+ const s=storage();saveRegister(s,key,record);assert.equal(canResubmitPending(loadRegister(s,key)),false);assert.equal(JSON.parse(s.getItem(key)!).validatedPendingId,undefined);
+ assert.equal(canResubmitPending(record),false);assert.equal(canResubmitPending({...record,validatedPendingId:'other-operation'}),false);
+ assert.equal(canResubmitPending({...record,pending:{...oldCommand,entryFormat:'unknown-future-version'},validatedPendingId:command.operationId}),false);
+ assert.equal(canResubmitPending({...record,pending:command}),true);
 });

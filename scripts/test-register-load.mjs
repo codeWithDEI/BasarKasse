@@ -8,6 +8,7 @@ import {join, resolve} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {openDatabase} from '../selfhost/sqlite.mjs';
 
+process.env.BASAR_TEAM_PIN_KEY='e3'.repeat(32); // Disposable fixture key.
 const seedCount = Number(process.env.LOAD_SEED_SALES ?? 5000);
 const perRegister = Number(process.env.LOAD_SALES_PER_REGISTER ?? 100);
 for (const n of [seedCount, perRegister]) assert.ok(Number.isSafeInteger(n) && n>=0 && n<=100000, 'Invalid workload size');
@@ -27,13 +28,13 @@ const statuses = {}, latency = [], refreshLatency = [];
 let replays = 0;
 const request = async (action, payload={}, session=cookie) => {
   const start = performance.now();
-  const r = await fetch(endpoint, {method:'POST', headers:{Origin:origin,'Content-Type':'application/json', ...(session?{Cookie:session}:{})}, body:JSON.stringify({action,...payload}), signal:AbortSignal.timeout(30000)});
+  const r = await fetch(endpoint, {method:'POST', headers:{Origin:origin,'Content-Type':'application/json', ...(session?{Cookie:session}:{})}, body:JSON.stringify({entryFormat:'tenths-v1',action,...payload}), signal:AbortSignal.timeout(30000)});
   const data = await r.json();
   return {r,data,ms:performance.now()-start};
 };
 const command = async (action, payload={}, session=cookie) => {
   const result = await request(action, {operationId:crypto.randomUUID(),eventId,...payload}, session);
-  assert.equal(result.r.status,200,JSON.stringify({action,status:result.r.status,data:result.data}));
+  assert.equal(result.r.status,200,JSON.stringify({entryFormat:'tenths-v1',action,status:result.r.status,data:result.data}));
   return result.data;
 };
 const state = async session => {
@@ -74,7 +75,8 @@ try {
   for(let number=1;number<=6;number++) tills.push((await command('openTill',{number,opening:10000})).tillId);
   const sessions=[];
   for(let n=0;n<6;n++) {
-    const result=await request('demo',{staffId:'demo-kasse'},null);
+    const staffId=crypto.randomUUID(),pin=String(3000+n);await command('addStaff',{operationId:staffId,name:'Load cashier '+n,role:'cashier',tillNumber:n+1,pin});
+    const result=await request('login',{staffId,pin},null);
     assert.equal(result.r.status,200);
     sessions.push(result.r.headers.get('set-cookie').split(';')[0]);
   }
@@ -93,13 +95,13 @@ try {
   const receipts=[];
   const outcomes=await Promise.allSettled(tills.map(async(tillId,register)=>{
     for(let n=0;n<perRegister;n++) {
-      const payload={eventId,tillId,operationId:crypto.randomUUID(),items:Array.from({length:5},()=>({id:crypto.randomUUID(),seller:register+1,price:100+register})),donation:5,received:1000};
+      const payload={eventId,tillId,operationId:crypto.randomUUID(),items:Array.from({length:5},()=>({id:crypto.randomUUID(),seller:register+1,price:100+50*register})),donation:5,received:5000};
       const result=await request('sale',payload,sessions[register]);
       statuses[result.r.status]=(statuses[result.r.status]||0)+1;
       latency.push(result.ms);
       assert.equal(result.r.status,200,JSON.stringify(result.data)); // No hidden retry conceals a conflict.
-      const goods=5*(100+register);
-      assert.equal(result.data.change,1000-goods-5);
+      const goods=5*(100+50*register);
+      assert.equal(result.data.change,5000-goods-5);
       receipts.push({payload,result:result.data});
       if(n%10===0) {
         // Deliberately ignore the first result at the client and replay its exact command.
@@ -122,7 +124,7 @@ try {
     const sale=byId.get(receipt.result.saleId); assert.ok(sale);
     assert.equal(sale.total,receipt.result.total); assert.equal(sale.donation,5);
   }
-  const expectedTotal=seedCount*505+perRegister*3105;
+  const expectedTotal=seedCount*505+perRegister*6780;
   assert.equal(after.data.sales.reduce((sum,s)=>sum+s.total+s.donation,0),expectedTotal);
   // Replay a previously acknowledged command after a server restart.
   const replay=await request('sale',receipts[0].payload,sessions[0]);
@@ -134,7 +136,7 @@ try {
   assert.equal(db.sqlite.prepare("SELECT count(*) n FROM operations WHERE event_id=? AND action='sale'").get(eventId).n,6*perRegister);
   assert.equal(db.sqlite.prepare("SELECT count(*) n FROM audit WHERE event_id=? AND action='Verkauf'").get(eventId).n,6*perRegister);
   db.close();
-  const report={timestamp:new Date().toISOString(),runtime:{node:process.version,sqlite:process.versions.sqlite,platform:process.platform,arch:process.arch,logicalCpus:cpus().length,memoryBytes:totalmem()},workload:{registers:6,seededSales:seedCount,itemsPerSale:5,newSales:6*perRegister,duplicateReplays:replays,refreshAfterEachSale:true},results:{statuses,elapsedSeconds:Math.round(elapsed)/1000,salesPerSecond:Math.round(6*perRegister/elapsed*10000)/10,postMs:{p50:percentile(latency,.5),p95:percentile(latency,.95),max:Math.round(Math.max(...latency)*10)/10},refreshMs:{p95:percentile(refreshLatency,.95)},finalStateBytes:after.bytes,persistedSales:expected,ledgerCents:expectedTotal,restartReplay:true,integrityCheck:'ok'},limitations:['Local single-process Next.js/SQLite, not a browser or D1 test','No production CPU/memory quota or reverse proxy','No Wi-Fi fault, power cut, disk-full or browser storage fault injection','Six sessions share the training cashier identity','Seed history bypasses API; measured new sales use HTTP']};
+  const report={timestamp:new Date().toISOString(),runtime:{node:process.version,sqlite:process.versions.sqlite,platform:process.platform,arch:process.arch,logicalCpus:cpus().length,memoryBytes:totalmem()},workload:{registers:6,seededSales:seedCount,itemsPerSale:5,newSales:6*perRegister,duplicateReplays:replays,refreshAfterEachSale:true},results:{statuses,elapsedSeconds:Math.round(elapsed)/1000,salesPerSecond:Math.round(6*perRegister/elapsed*10000)/10,postMs:{p50:percentile(latency,.5),p95:percentile(latency,.95),max:Math.round(Math.max(...latency)*10)/10},refreshMs:{p95:percentile(refreshLatency,.95)},finalStateBytes:after.bytes,persistedSales:expected,ledgerCents:expectedTotal,restartReplay:true,integrityCheck:'ok'},limitations:['Local single-process Next.js/SQLite, not a browser or D1 test','No production CPU/memory quota or reverse proxy','No Wi-Fi fault, power cut, disk-full or browser storage fault injection','Six individually assigned cashier identities; no real tablets','Seed history bypasses API; measured new sales use HTTP']};
   if(process.env.LOAD_REPORT) writeFileSync(resolve(process.env.LOAD_REPORT),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report,null,2));
 } finally {

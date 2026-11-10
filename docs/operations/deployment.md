@@ -8,6 +8,7 @@ Use a reviewed exact revision and separate data/access for each environment.
 
 | Variable | Purpose |
 | --- | --- |
+| `BASAR_TEAM_PIN_KEY` | Stable secret: 64 hex characters for AES-GCM manager PIN display; separately backed up |
 | `BASAR_DATABASE` | Writable local SQLite file; default `data/basarkasse.sqlite` |
 | `BASAR_PUBLIC_ORIGIN` | Public HTTP(S) origin only, e.g. `https://cash.example.org`; no path |
 | `HOSTNAME`, `PORT` | Self-hosted listening address/port; use loopback behind a host proxy |
@@ -37,7 +38,12 @@ Startup applies unapplied `drizzle/*.sql` files in filename order, each in a
 transaction, and records them in `__basar_migrations`. The hosted D1 platform
 applies migrations separately; self-host migration tracking is not a D1 migration
 ledger. Back up before an upgrade; test the migration on a restored copy first.
-No general down-migration mechanism is supplied.
+No general down-migration mechanism is supplied. Migration `0004_event_workflow.sql`
+rebuilds payouts without changing existing values and adds scope/pool policy.
+Existing events stay historical; create a new event for the new workflow. Set and
+separately back up the PIN display key before provisioning teams. See
+[event teams and settlement](event-teams-and-settlement.md). Close old client tabs;
+obsolete new commands are gated while original recorded outcomes remain available.
 
 ## Deployment verification
 

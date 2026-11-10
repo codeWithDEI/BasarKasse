@@ -17,7 +17,12 @@ export function useRegister() {
     navigator.locks.request(key,{signal:controller.signal},async()=>{
       if(!active)return;
       try {
-        const loaded=loadRegister(localStorage,key);
+        let loaded=loadRegister(localStorage,key);
+        const link=new URLSearchParams(window.location.search),event=link.get('event'),staff=link.get('staff');
+        // An explicit login link may configure an idle tablet, never move a draft or pending command.
+        if(event&&event.length<=100&&!loaded.pending&&!loaded.items.length&&!loaded.seller&&!loaded.price){
+          loaded={...loaded,eventId:event,...(loaded.eventId!==event?{tillId:'',lastSale:null,received:'',roundTo:''}:{}),...(staff&&staff.length<=100?{lastStaffId:staff}:{})};
+        }
         // Verify that writes are possible even when a previous record already exists.
         saveRegister(localStorage,key,loaded);
         current.current=loaded;setRecord(loaded);owned.current=true;setReady(true);setStorageError('');

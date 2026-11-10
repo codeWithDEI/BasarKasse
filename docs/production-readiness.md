@@ -16,9 +16,9 @@ is the current priority; no automatic live approval follows from its implementat
 | PR-02: contention handling | Replace the five-attempt cliff with measured bounded retry/backoff or another explicit serialization strategy; classify busy/timeout failures | Six synchronized registers and mixed manager commands: no partial or duplicate writes, no unresolved user outcome | Twelve server attempts with jitter; one-hour intended-server 6/12-client run passed, 2,706 new sales and 277 replays reconciled; four-hour/device acceptance open |
 | PR-03: bounded work | Targeted command reads, indexed aggregates and paginated history; explicit full exports remain | End-of-day and double-forecast datasets meet agreed response targets under simultaneous register traffic | Implemented 50-receipt pages and whole-event totals; 12,706-receipt Ubuntu run passed, booking p95 983.4 ms / p99 1,127.9 ms; agreed forecast and physical acceptance open |
 | PR-04: database invariants | Unique event receipt numbers and open till numbers; consistent operation scope; stable actors and validated migrations | Concurrent open/sale/payout/close/void tests; old-data upgrade and rollback/restore drill | Implemented unique receipt/open-till constraints and indexes; migration refuses conflicting history; restore fencing tested |
-| PR-05: production access | Explicit production bootstrap, no demo accounts/login; staff lifecycle, PIN change, revoke sessions, manager recovery; define cashier data access | New production database has no default credentials; permission and recovery tests pass | Open |
+| PR-05: production access | Explicit production bootstrap, no demo accounts/login; staff lifecycle, PIN change, revoke sessions, manager recovery; define cashier data access | New production database has no default credentials; permission and recovery tests pass | Scope, event teams, PIN reset/display and session revocation implemented; production bootstrap/removal of demo access and central manager recovery remain open |
 | PR-06: recoverable operations | Automated consistent off-host backups, retention/encryption/access policy, monitoring and tested spare-host recovery | Restore a backup onto a separate instance, replay/reconcile receipts and measure recovery time/loss window | Scheduled verified Ubuntu/Mac copies, health dashboard, actual off-host restore/epoch drill and isolated Ubuntu restore passed; loss-window, encryption and spare-host sign-off open |
-| PR-07: six-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Open |
+| PR-07: six-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Venue WLAN and Android/iOS mix reported; actual Internet/physical-device/prolonged acceptance open |
 | PR-08: ownership and cash process | Named technical lead/deputy, event manager, cash reconciliation, incident fallback and confirmed organizer requirements | Organizer signs readiness checklist; no critical unresolved risk | Open |
 
 Fixing these gates should be small reviewed changes with regression evidence;
@@ -65,7 +65,7 @@ record release images and runtime SQLite versions. Add structured non-sensitive
 metrics for latency, conflicts, unknown operations, backup age, disk and restarts.
 Triage dependency advisories rather than using audit counts as a safety claim.
 
-Decide license, contribution policy, maintainers, security reporting and supported
+GPL-3.0-only is selected. Decide contribution policy, maintainers, security reporting and supported
 runtime. Record deployment-specific limits. Plan data retention and archival
 without deleting replay protection for pending clients.
 

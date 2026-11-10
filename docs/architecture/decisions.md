@@ -14,7 +14,7 @@ Proposals remain proposals until implemented and verified in a reviewed change.
 | ADR-007 | Proposed | Typed command contracts and injected persistence interface; split UI/auth/query/booking modules with behavior preserved. |
 | ADR-008 | Implemented; capacity acceptance open | Targeted command reads, 50-row keyset history and server financial aggregates, supported by unique constraints/indexes. Explicit exports remain full; recorded workload limits still apply. |
 | ADR-009 | Open | Choose the primary supported live runtime and operational owner. SQLite may suffice for six tills, but current evidence is incomplete. |
-| ADR-010 | Open | Decide license, external contribution policy, release maintainers and supported security contact. |
+| ADR-010 | License implemented; ownership policy open | Owner selected GPL-3.0-only. Third-party notices remain. Contribution ownership, release maintainers and supported security contact remain open. |
 
 ## When to revisit the database choice
 
@@ -26,3 +26,16 @@ A database migration alone does not fix lost browser state or an uncertain sale.
 
 Future ADRs should state context, considered options, decision, consequences,
 validation and the migration/rollback plan. Keep old decisions and mark supersession.
+
+## Event workflow decisions — 10 November 2026
+
+- New events settle counted cash through a separate event pool. One till contribution
+  is unique and atomic with closure; payouts retain an explicit funding source.
+- Existing events keep their original till/cent policy; no historical payout is
+  rounded again. New net claims round down to ten cents with a separate donation.
+- Event/till scope is enforced server-side. Authorization versions guard both
+  financial commit and session issuance during concurrent team/PIN changes.
+- Manager-visible PINs use AES-GCM under a runtime key outside SQLite, separate
+  from salted login hashes and explicit responses only.
+- Tenths price input has an atomic browser migration and obsolete-client HTTP
+  gate; original financial IDs/payloads remain unchanged.

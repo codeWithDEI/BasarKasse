@@ -4,18 +4,19 @@ import {readFileSync} from 'node:fs';
 const basePath=JSON.parse(readFileSync('.next/required-server-files.json','utf8')).config.basePath;
 const key=registerKey(basePath),origin='http://127.0.0.1:3138',api=origin+basePath+'/api/basar';
 async function setup(context:BrowserContext,page:Page) {
- const post=async(action:string,p:Record<string,unknown>={})=>{const r=await context.request.post(api,{headers:{Origin:origin},data:{action,operationId:crypto.randomUUID(),...p}});expect(r.status()).toBe(200);return r.json();};
+ const post=async(action:string,p:Record<string,unknown>={})=>{const r=await context.request.post(api,{headers:{Origin:origin},data:{entryFormat:'tenths-v1',action,operationId:crypto.randomUUID(),...p}});expect(r.status()).toBe(200);return r.json();};
  await post('demo',{staffId:'demo-leitung'});
  const {eventId}=await post('createEvent',{eventId:'demo-fruehjahr',name:'Browser recovery '+crypto.randomUUID(),date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:6});
  const {tillId}=await post('openTill',{eventId,number:1,opening:10000});
+ const cashierId=crypto.randomUUID();await post('addStaff',{eventId,operationId:cashierId,name:'Fixture cashier '+cashierId,role:'cashier',tillNumber:1,pin:'1234'});
  await page.addInitScript(({key,record})=>{if(localStorage.getItem(key)===null)localStorage.setItem(key,JSON.stringify(record));},{key,record:{...emptyRegister(),eventId,tillId}});
  await page.goto(origin+basePath+'/');
  await expect(page.getByRole('button',{name:'Zum Einkauf hinzufügen'})).toBeEnabled();
- return {eventId,tillId,post,state:async()=>{const r=await context.request.get(api+'?event='+eventId);expect(r.status()).toBe(200);return r.json();}};
+ return {eventId,tillId,cashierId,post,state:async()=>{const r=await context.request.get(api+'?event='+eventId);expect(r.status()).toBe(200);return r.json();}};
 }
 async function basket(page:Page) {
  await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');
- await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('65');
  await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
  await page.getByRole('textbox',{name:'Aufrunden auf',exact:true}).fill('7');
  await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('10');
@@ -30,11 +31,102 @@ async function pending(page:Page) {
  await expect.poll(()=>page.evaluate(key=>!!JSON.parse(localStorage.getItem(key)!).pending,key)).toBe(true);
 }
 
+test('cashier sees its assigned event/till and own turnover while fifty-cent entry works without a comma',async({context,page})=>{
+ const fixture=await setup(context,page);
+ const other=(await fixture.post('openTill',{eventId:fixture.eventId,number:2,opening:5000})).tillId;
+ await fixture.post('sale',{eventId:fixture.eventId,tillId:fixture.tillId,items:[{id:crypto.randomUUID(),seller:1,price:650}],received:1000});
+ await fixture.post('sale',{eventId:fixture.eventId,tillId:other,items:[{id:crypto.randomUUID(),seller:42,price:250}],received:1000});
+ await fixture.post('login',{staffId:fixture.cashierId,pin:'1234'});await page.reload();
+ await expect(page.getByRole('combobox',{name:'Veranstaltung wählen'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Verkäufe',exact:true}).click();
+ await expect(page.locator('.stat-card').filter({hasText:'Kasseneinnahmen'}).locator('strong')).toContainText('6,50');
+ await expect(page.getByRole('button',{name:'Verkauf 2 öffnen'})).toHaveCount(0);
+ expect((await context.request.get(api+'?view=register&event=demo-fruehjahr')).status()).toBe(403);
+ await page.getByRole('button',{name:'Kasse',exact:true}).click();
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('7');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
+ await expect(page.getByText(/Bitte ohne Komma in 50-Cent-Schritten/)).toBeVisible();
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('25');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
+ await expect(page.locator('.basket-row strong')).toHaveText(/2,50/);
+ await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('5');await page.getByRole('button',{name:'Verkauf abschließen'}).click();
+ await expect(page.getByText('VERKAUF #0003 GESPEICHERT')).toBeVisible();
+ const own=await fixture.state();expect(own.sales).toHaveLength(2);expect(own.tills).toHaveLength(1);
+});
+
+test('a personal event login link preselects the cashier and needs only its PIN on an idle tablet',async({context,page})=>{
+ const fixture=await setup(context,page);await context.clearCookies();
+ await page.goto(origin+basePath+'/?'+new URLSearchParams({event:fixture.eventId,staff:fixture.cashierId}));
+ await page.getByRole('button',{name:'Anmelden & Kasse öffnen',exact:true}).click();
+ await expect(page.locator('.login-person')).toContainText('Fixture cashier');await expect(page.getByRole('combobox',{name:'Name',exact:true})).toHaveCount(0);
+ await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();
+ await expect(page.locator('.profile')).toContainText('Fixture cashier');await expect(page.getByRole('combobox',{name:'Veranstaltung wählen'})).toBeDisabled();
+ expect((await fixture.state()).user).toMatchObject({id:fixture.cashierId,event_id:fixture.eventId,till_number:1});
+});
+
+test('an unmarked pending command from an obsolete client is checked but never blindly resubmitted after price migration',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);
+ const operationId=await page.evaluate(key=>{
+  const record=JSON.parse(localStorage.getItem(key)!);const id=crypto.randomUUID();
+  record.pending={action:'sale',operationId:id,eventId:record.eventId,staffId:'demo-leitung',tillId:record.tillId,items:record.items,received:1000,donation:50,instanceEpoch:'initial'};
+  delete record.validatedPendingId;localStorage.setItem(key,JSON.stringify(record));return id;
+ },key);
+ let sales=0;page.on('request',request=>{if(request.method()==='POST'&&request.postDataJSON()?.action==='sale')sales++;});
+ await page.reload();await expect(page.getByText(/offene Preisvorgang stammt aus einer älteren Anwendungsversion/)).toBeVisible();
+ expect(sales).toBe(0);expect((await fixture.state()).sales).toHaveLength(0);expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).pending.operationId,key)).toBe(operationId);
+});
+
+test('event team editor creates and changes an assigned account, revealing PINs only explicitly and never persisting them on the tablet',async({context,page})=>{
+ const fixture=await setup(context,page);await page.getByRole('button',{name:'Verwaltung',exact:true}).click();
+ await page.getByRole('button',{name:'Person hinzufügen',exact:true}).click();let dialog=page.getByRole('dialog');
+ await dialog.getByLabel('Name',{exact:true}).fill('Tablet team helper');await dialog.getByLabel('Fest zugewiesene Kasse').selectOption('2');
+ await dialog.getByLabel('Persönliche PIN',{exact:true}).fill('86427531');await dialog.getByRole('button',{name:'Person hinzufügen',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ let member=page.locator('.team-list > div').filter({hasText:'Tablet team helper'});await expect(member).toContainText('Kasse 2');await expect(member.locator('.team-pin')).toHaveCount(0);
+ await page.getByRole('button',{name:'PINs anzeigen',exact:true}).click();await expect(member.locator('.team-pin')).toContainText('86427531');
+ expect(await page.evaluate(()=>Object.values(localStorage).join('\n'))).not.toContain('86427531');expect(JSON.stringify(await fixture.state())).not.toContain('86427531');
+ await member.getByRole('button',{name:'Tablet team helper bearbeiten',exact:true}).click();dialog=page.getByRole('dialog');
+ await dialog.getByLabel('Name',{exact:true}).fill('Updated tablet helper');await dialog.getByLabel('Fest zugewiesene Kasse').selectOption('3');await dialog.getByLabel('Neue persönliche PIN (optional)',{exact:true}).fill('68427531');
+ await dialog.getByRole('button',{name:'Änderungen speichern',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+ member=page.locator('.team-list > div').filter({hasText:'Updated tablet helper'});await expect(member).toContainText('Kasse 3');await expect(member.locator('.team-pin')).toHaveCount(0);
+ await page.getByRole('button',{name:'PINs anzeigen',exact:true}).click();await expect(member.locator('.team-pin')).toContainText('68427531');
+ expect(await page.evaluate(()=>Object.values(localStorage).join('\n'))).not.toContain('68427531');
+});
+
+test('cash is counted into the pool before a ten-cent-rounded payout and documented float return',async({context,page})=>{
+ const fixture=await setup(context,page);await fixture.post('openTill',{eventId:fixture.eventId,number:2,opening:5000});await basket(page);
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);
+ await page.getByRole('button',{name:'Abrechnung',exact:true}).click();await page.getByRole('button',{name:'Verkauf beenden',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Verkauf beenden',exact:true}).click();
+ const seller=()=>page.getByRole('row').filter({hasText:'#042'}).getByRole('button',{name:'Abrechnung',exact:true});
+ await seller().click();await expect(page.getByRole('dialog').getByText(/Bitte zuerst alle Kassen zählen und schließen/)).toBeVisible();await page.getByRole('dialog').getByRole('button',{name:'Dialog schließen'}).click();
+ await page.locator('.till-card').filter({hasText:'Kasse 1'}).getByRole('button',{name:'Kassenabschluss',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Gezählter Bargeldbestand in Euro').fill('107');await page.getByRole('dialog').getByRole('button',{name:'Kasse verbindlich abschließen'}).click();
+ await page.locator('.till-card').filter({hasText:'Kasse 2'}).getByRole('button',{name:'Kassenabschluss',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Gezählter Bargeldbestand in Euro').fill('49,50');await page.getByRole('dialog').getByLabel('Notiz zum Abschluss').fill('Synthetic count difference');await page.getByRole('dialog').getByRole('button',{name:'Kasse verbindlich abschließen'}).click();
+ await expect(page.locator('.pool-totals strong').first()).toContainText('156,50');await seller().click();
+ await expect(page.getByRole('dialog').locator('.detail-total strong')).toContainText('5,50');await expect(page.getByRole('dialog')).toContainText('Abrundung für den Basar');
+ await page.getByRole('dialog').getByRole('button',{name:'Auszahlung bestätigen'}).click();await expect(page.locator('.pool-totals strong').first()).toContainText('151,00');
+ await page.getByRole('button',{name:'Einlage / Entnahme aus Topf',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Entnahme',exact:true}).click();await page.getByRole('dialog').getByLabel('Betrag in Euro').fill('150');await page.getByRole('dialog').getByLabel('Grund',{exact:true}).fill('Return opening floats');await page.getByRole('dialog').getByRole('button',{name:'Geldbewegung buchen',exact:true}).click();
+ await expect(page.locator('.pool-totals strong').first()).toHaveText(/^1,00\s*€$/);const full=await fixture.state();expect(full.pool.balance).toBe(100);expect(full.payouts[0]).toMatchObject({gross:650,commission:98,rounding:2,net:550,funding:'pool',till_id:null});
+});
+
+test('a pending sale survives a different assigned cashier session and recovers through the original login',async({context,page})=>{
+ const fixture=await setup(context,page),second=crypto.randomUUID();await fixture.post('openTill',{eventId:fixture.eventId,number:2,opening:5000});
+ await fixture.post('addStaff',{eventId:fixture.eventId,operationId:second,name:'Wrong assigned cashier',role:'cashier',tillNumber:2,pin:'4826'});
+ await fixture.post('login',{staffId:fixture.cashierId,pin:'1234'});await page.reload();await basket(page);let blocked=true;const ids:string[]=[];
+ await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(blocked)return route.abort('failed');}await route.continue();});
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
+ await fixture.post('login',{staffId:second,pin:'4826'});await page.reload();await pending(page);
+ await page.getByRole('button',{name:'Ursprüngliche Anmeldung laden',exact:true}).click();await expect(page.locator('.login-person')).toContainText('Fixture cashier');
+ blocked=false;await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();await receipt(page);expect(new Set(ids).size).toBe(1);expect((await fixture.state()).sales).toHaveLength(1);
+});
+
 test('draft including unsubmitted input survives reload; a receipt replaces basket and pending together',async({context,page})=>{
  const fixture=await setup(context,page);await basket(page);
- await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('7');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('2,00');
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('7');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('20');
  await page.reload();await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
- await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('7');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('2,00');
+ await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('7');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('20');
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);await page.reload();await receipt(page);
  expect((await fixture.state()).sales).toHaveLength(1);
 });
@@ -105,7 +197,7 @@ test('if the pending intent cannot be saved locally, no sale request is transmit
 
 test('interruption immediately after adding an item cannot restore that item in both basket and entry fields',async({context,page})=>{
  await setup(context,page);
- await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('65');
  await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){const before=k===key?JSON.parse(this.getItem(k)!):null;original.call(this,k,v);if(k===key&&!before.items.length&&JSON.parse(v).items.length===1)throw new DOMException('Interrupted after write','QuotaExceededError');};},key);
  await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();await expect(page.getByText(/Kassenstand konnte nicht sicher gespeichert/)).toBeVisible();
  await page.reload();await expect(page.locator('.basket-row')).toHaveCount(1);await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('');
@@ -135,7 +227,7 @@ test('a valid session survives reload and wake without another login, retaining 
 
 test('remembered personal login needs only a PIN; a wrong PIN preserves the draft and never enters storage',async({context,page})=>{
  const fixture=await setup(context,page),staffId=crypto.randomUUID();
- await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Recovery cashier '+staffId,role:'cashier',pin:'5826'});
+ await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Recovery cashier '+staffId,role:'cashier',tillNumber:1,pin:'5826'});
  await fixture.post('login',{staffId,pin:'5826'});await page.reload();await basket(page);
  await context.clearCookies();await page.reload();await page.getByRole('button',{name:'Erneut anmelden',exact:true}).click();
  await expect(page.locator('.login-person')).toContainText('Recovery cashier');
@@ -150,7 +242,7 @@ test('remembered personal login needs only a PIN; a wrong PIN preserves the draf
 
 test('pending recovery selects the original cashier even when another person is remembered',async({context,page})=>{
  const fixture=await setup(context,page),staffId=crypto.randomUUID();
- await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Original cashier '+staffId,role:'cashier',pin:'71925826'});
+ await fixture.post('addStaff',{eventId:fixture.eventId,operationId:staffId,name:'Original cashier '+staffId,role:'cashier',tillNumber:1,pin:'71925826'});
  await fixture.post('login',{staffId,pin:'71925826'});await page.reload();await basket(page);let blocked=true;const ids:string[]=[];
  await context.route('**/api/basar',async route=>{if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='sale'){ids.push(route.request().postDataJSON().operationId);if(blocked)return route.abort('failed');}await route.continue();});
  await page.getByRole('button',{name:'Verkauf abschließen'}).click();await pending(page);await expect(page.getByText(/Verbindung unterbrochen/)).toBeVisible();
@@ -165,11 +257,11 @@ test('pending recovery selects the original cashier even when another person is 
 
 test('a deliberate person switch uses the new PIN and preserves an unsubmitted basket',async({context,page})=>{
  const fixture=await setup(context,page);await basket(page);await page.locator('.profile').click();
- await page.getByRole('combobox',{name:'Name',exact:true}).selectOption('demo-kasse');
+ await page.getByRole('combobox',{name:'Name',exact:true}).selectOption(fixture.cashierId);
  await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Anmelden',exact:true}).click();
  await expect(page.locator('dialog')).not.toBeVisible();await expect(page.locator('.profile')).toContainText('Kassiererin');
  await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
- await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);expect((await fixture.state()).sales[0].staff_id).toBe('demo-kasse');
+ await page.getByRole('button',{name:'Verkauf abschließen'}).click();await receipt(page);expect((await fixture.state()).sales[0].staff_id).toBe(fixture.cashierId);
 });
 
 

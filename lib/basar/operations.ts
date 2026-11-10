@@ -1,5 +1,6 @@
 import {database} from './database';
 import type {Person} from './domain';
+import {assertEventAccess} from './access';
 
 export class ApiError extends Error {
   constructor(message:string, public status=400, public code='INVALID_COMMAND', public recorded=false) { super(message); }
@@ -14,10 +15,10 @@ function canonical(value:unknown):unknown {
 }
 export async function requestHash(action:string, p:Record<string,any>) {
   // Do not persist a fast offline PIN verifier. Staff creation is not a durable browser command.
-  if (action==='addStaff') return null;
+  if (action==='addStaff'||action==='updateStaff') return null;
   const fields:Record<string,string[]> = {
     sale:['tillId','items','received','donation'], openTill:['number','opening'], void:['saleId','reason'],
-    movement:['tillId','amount','reason'], payout:['seller','tillId'], closeTill:['tillId','counted','note'],
+    movement:['tillId','amount','reason'], poolMovement:['amount','reason'], payout:['seller','tillId'], closeTill:['tillId','counted','note'],
     eventStatus:['status'], updateEvent:['name','date','commission','sellerMin','sellerMax','tillCount'],
     createEvent:['name','date','commission','sellerMin','sellerMax','tillCount'],
   };
@@ -29,8 +30,9 @@ export async function requestHash(action:string, p:Record<string,any>) {
 export async function operationStatus(action:string, p:Record<string,any>, user:Person):Promise<OperationStatus> {
   if(typeof p.operationId!=='string'||p.operationId.length<8||p.operationId.length>100) throw new ApiError('Die Vorgangskennung fehlt.');
   const row=await database().prepare('SELECT * FROM operations WHERE id=?').bind(p.operationId).first<Stored>();
-  if(!row) return {state:'not_found'};
+  if(!row){assertEventAccess(user,p.eventId);return {state:'not_found'};}
   if(row.staff_id!==user.id||row.event_id!==p.eventId||row.action!==action) throw new ApiError('Dieser Vorgang gehört zu einer anderen Person oder Veranstaltung.',409,'OPERATION_MISMATCH');
+  assertEventAccess(user,p.eventId);
   const hash=await requestHash(action,p);
   if(row.request_hash && row.request_hash!==hash) throw new ApiError('Der gespeicherte Vorgang hat andere Buchungsdaten. Bitte die Kassenleitung hinzuziehen.',409,'OPERATION_MISMATCH');
   // Recover pre-upgrade sales against their original persisted receipt, not just an unverified result.

@@ -60,3 +60,9 @@ host status directory read-only at `/ops-state`. Install the backup service and
 Mac puller from [the operations guide](../docs/operations/monitoring-and-backups.md)
 before expecting a green health page at `/basarkasse/health`. Source database
 backups and private monitoring files are never served as web assets.
+
+For event-specific teams, set the stable runtime `BASAR_TEAM_PIN_KEY` in the private
+`.env` before creating/resetting personal PINs. It is not a build argument and must
+be backed up separately from database copies. New events use counted pooled
+settlement; existing events remain historical. Follow the
+[team/settlement upgrade guide](../docs/operations/event-teams-and-settlement.md).

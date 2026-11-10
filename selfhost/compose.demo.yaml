@@ -12,6 +12,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      BASAR_TEAM_PIN_KEY: ${BASAR_TEAM_PIN_KEY:-}
       BASAR_DATABASE: /data/basarkasse.sqlite
       BASAR_OPS_STATE: /ops-state
       BASAR_REVISION: ${BASAR_REVISION:-unrecorded}

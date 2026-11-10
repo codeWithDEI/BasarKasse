@@ -12,13 +12,13 @@ def snapshot(path):
         event=db.execute("SELECT * FROM events WHERE name LIKE 'Isolated Ubuntu soak %'").fetchone()
         if not event or event['status']!='closed': return None
         data={'event':dict(event),'staff':[dict(row) for row in db.execute('SELECT id,name,role FROM staff')]}
-        for table in ['sales','payouts','movements','operations','audit','till_sessions']:
-            data[table]=[dict(row) for row in db.execute('SELECT * FROM '+table+' WHERE event_id=?',(event['id'],))]
+        for table in ['sales','payouts','movements','operations','audit','till_sessions','pool_entries']:
+            data[table]=[dict(row) for row in db.execute('SELECT * FROM '+table+' WHERE event_id=?',(event['id'],))] if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone() else []
         return data
     finally: db.close()
 
 def verify(data,seed):
-    event=data['event']; assert event['commission']==1500 and event['status']=='closed'
+    event=data['event']; pooled=event.get('settlement_mode')=='pool'; assert event['commission']==1500 and event['status']=='closed'
     sales=data['sales']; staff={row['id']:row for row in data['staff']}; tills={row['id']:row for row in data['till_sessions']}
     assert len(tills)==6 and {row['number'] for row in tills.values()}==set(range(1,7))
     assert {row['number'] for row in sales}==set(range(1,len(sales)+1)), 'Receipt sequence differs'
@@ -40,13 +40,13 @@ def verify(data,seed):
         else:
             actor=staff[sale['staff_id']]; match=re.fullmatch(r'Synthetic cashier (\d+)',actor['name']); assert match and actor['role']=='cashier'
             index=int(match.group(1)); assert 0<=index<12
-            expected=[(index+1,100+index)]*5; assert tills[sale['till_id']]['number']==index%6+1
+            expected=[(index+1,100+(50 if pooled else 1)*index)]*5; assert tills[sale['till_id']]['number']==index%6+1
         assert [(item['seller'],item['price']) for item in items]==expected, 'Stored items differ from fixture intent'
-        total=sum(price for _,price in expected); assert sale['total']==total and sale['donation']==5 and sale['received']==1000
+        total=sum(price for _,price in expected); received=5000 if pooled and number>seed else 1000; assert sale['total']==total and sale['donation']==5 and sale['received']==received
         op,result=sale_ops[sale['id']]; assert op['staff_id']==sale['staff_id']
-        for key,value in [('number',number),('total',total),('donation',5),('received',1000),('change',1000-total-5)]: assert result[key]==value, 'Stored receipt result differs'
+        for key,value in [('number',number),('total',total),('donation',5),('received',received),('change',received-total-5)]: assert result[key]==value, 'Stored receipt result differs'
         if number>seed:
-            intent={'tillId':sale['till_id'],'items':[{'id':i['id'],'seller':i['seller'],'price':i['price']} for i in items],'received':1000,'donation':5}
+            intent={'tillId':sale['till_id'],'items':[{'id':i['id'],'seller':i['seller'],'price':i['price']} for i in items],'received':received,'donation':5}
             assert op['request_hash']==fingerprint(intent), 'Stored rows differ from original command fingerprint'
             new_intents+=1
         if sale['voided_at']:
@@ -64,21 +64,30 @@ def verify(data,seed):
         movement_hashes[fingerprint({'tillId':row['till_id'],'amount':row['amount'],'reason':row['reason']})]+=1
     assert signs[100]==signs[-100] and hashes['movement']==movement_hashes, 'Cash movement effects differ'
     payouts=data['payouts']; assert len(payouts)==len(gross) and {p['seller'] for p in payouts}==set(gross), 'Seller claims missing or duplicated'
-    payout_hashes=collections.Counter(); net_total=commission_total=0
+    payout_hashes=collections.Counter(); net_total=commission_total=rounding_total=0
     for payout in payouts:
-        expected_gross=gross[payout['seller']]; commission=(expected_gross*1500+5000)//10000; net=expected_gross-commission
+        expected_gross=gross[payout['seller']]; commission=(expected_gross*1500+5000)//10000; unrounded=expected_gross-commission; rounding=unrounded%10 if pooled else 0; net=unrounded-rounding
         assert (payout['gross'],payout['commission'],payout['net'])==(expected_gross,commission,net), 'Individual seller payout differs'
-        cash[payout['till_id']]-=net;net_total+=net;commission_total+=commission
+        if not pooled: cash[payout['till_id']]-=net
+        assert payout.get('rounding',0)==rounding; assert payout.get('funding','till')==('pool' if pooled else 'till')
+        net_total+=net;commission_total+=commission;rounding_total+=rounding
         payout_hashes[fingerprint({'seller':payout['seller'],'tillId':payout['till_id']})]+=1
     assert hashes['payout']==payout_hashes, 'Payout effects differ from their intents'
     for key,till in tills.items():
         assert till['closed_at'] and till['opening']==10000
         assert till['counted']==cash[key] and till['expected']==cash[key], 'Independent till balance differs'
-    assert sum(cash.values())==60000+goods+donations-net_total
+    final_cash=sum(cash.values())-net_total if pooled else sum(cash.values())
+    assert final_cash==60000+goods+donations-net_total
+    if pooled:
+        entries=data['pool_entries']; assert len(entries)==6 and {entry['till_id'] for entry in entries}==set(tills), 'Pool contribution missing or duplicated'
+        for entry in entries: assert entry['kind']=='till' and entry['amount']==cash[entry['till_id']], 'Counted pool contribution differs'
+        assert sum(entry['amount'] for entry in entries)-net_total==final_cash
+        assert all(payout['till_id'] is None for payout in payouts)
+
     assert sum(1 for row in data['audit'] if row['action']=='Verkauf')==len(sales)
     assert sum(1 for row in data['audit'] if row['action']=='Verkäufer ausgezahlt')==len(payouts)
     assert sum(1 for row in data['audit'] if row['action']=='Kassenabschluss')==6
-    return {'receiptsVerified':len(sales),'newCommandFingerprintsVerified':new_intents,'voidsVerified':sum(void_hashes.values()),'movementsVerified':len(movements),'individualSellerPayoutsVerified':len(payouts),'tillsVerified':6,'goodsCents':goods,'donationCents':donations,'commissionCents':commission_total,'netPayoutCents':net_total,'finalCashCents':sum(cash.values())}
+    return {'receiptsVerified':len(sales),'newCommandFingerprintsVerified':new_intents,'voidsVerified':sum(void_hashes.values()),'movementsVerified':len(movements),'individualSellerPayoutsVerified':len(payouts),'tillsVerified':6,'goodsCents':goods,'donationCents':donations,'commissionCents':commission_total,'netPayoutCents':net_total,'roundingDonationCents':rounding_total,'poolContributionsVerified':6 if pooled else 0,'finalCashCents':final_cash}
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('scratch');parser.add_argument('output');parser.add_argument('--seed',type=int,default=10000);parser.add_argument('--wait-seconds',type=int,default=1200);args=parser.parse_args()
