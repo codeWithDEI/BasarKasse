@@ -10,6 +10,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      BASAR_TEAM_PIN_KEY: ${BASAR_TEAM_PIN_KEY:-}
       BASAR_DATABASE: /data/basarkasse.sqlite
       BASAR_PUBLIC_ORIGIN: ${BASAR_PUBLIC_ORIGIN:-http://localhost:3000}
 volumes:

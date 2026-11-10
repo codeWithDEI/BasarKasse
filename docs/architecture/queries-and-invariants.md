@@ -22,6 +22,11 @@ and reconcile such data before retrying an upgrade. Drizzle schema, SQL, snapsho
 and journal are committed together. Self-hosting explicitly uses WAL and
 `synchronous=FULL` on every connection.
 
+Migration `0004_event_workflow.sql` adds one counted pool contribution per till,
+payout accounting/funding checks, event/till staff scope and authorization version.
+Historical payout values are copied unchanged; invalid accounting aborts migration
+instead of inventing repaired cash. See [domain rules](domain-model.md).
+
 ## Command reads
 
 `lib/basar/queries.ts` loads the requested event and the relevant tills, payouts
@@ -45,7 +50,7 @@ The current UI uses `GET /api/basar?view=register&event=...`. It returns:
 
 - At most 50 receipts, with `salesPage.nextBefore` for keyset pagination by the
   unique receipt number. New inserts do not shift old pages like numeric offsets.
-- Whole-event goods/donation/count/item/void totals, seller summaries and till
+- Whole-event goods/donation/count/item/void totals for managers (assigned-till totals for cashiers), seller summaries and till
   balances calculated on the server in the same batch as that receipt page and
   event revision. They do not describe only the visible fifty receipts.
 - The latest 200 audit rows, staff/event selectors and required till/payout data.
@@ -54,6 +59,10 @@ The current UI uses `GET /api/basar?view=register&event=...`. It returns:
 `before` must be a positive safe integer; search text is limited to 80 characters
 and bound as query parameters. Receipt/person/till/seller search applies to the
 whole event before the page limit, including receipts outside the initial page.
+Cashier SQL filters constrain tills, receipts, totals and full exports to their
+assigned number. Seller/payout/audit/pool data is manager-only; PIN responses are
+separate. Managers are event-bound unless using the central setup account.
+
 The UI explicitly navigates older/newer pages and discards stale refreshes.
 Search/page state is separate from the durable basket/pending-command record.
 

@@ -6,10 +6,10 @@ controls below; actual tablet/venue acceptance and the other
 
 ## Server booking protocol
 
-1. Enforce the instance epoch/write pause, then validate the operation ID. Look up its stored outcome and verify staff, event,
+1. Enforce the instance epoch/write pause, current authorization and event/till scope, then validate the operation ID. Look up its stored outcome and verify staff, event,
    action and request fingerprint before returning it.
 2. Read the event revision and command-specific rows/aggregates; validate the command.
-3. Build one atomic batch claiming the observed revision. Successful commands
+3. Build one atomic batch claiming the observed revision and matching active staff authorization version. Successful commands
    store their financial effect, audit entry and `committed` operation result.
 4. Business rejections are also stored against the operation ID, guarded by the
    same event revision, as a `rejected` outcome with no financial/audit effect.
@@ -19,6 +19,10 @@ controls below; actual tablet/venue acceptance and the other
    with bounded randomized delay.
    Exhaustion returns `409 / CONCURRENT_WRITE`, not a recorded rejection.
 
+Pooled closure updates the till and its unique counted contribution together. Pool
+payouts/withdrawals use the same event revision and cannot overdraw cash. Team edits
+revoke sessions atomically; stale financial work cannot commit with old authorization.
+
 A stored rejection cannot later become a sale, even when another copy of the
 request is in flight. The rejection participates in the revision/operation
 protocol; it is not inferred from an arbitrary HTTP 400. If another copy committed
@@ -26,10 +30,11 @@ first, replay returns its stored result instead. This prevents a client from
 clearing a rejected draft while an earlier copy later books the same intent.
 
 `createEvent` uses its own atomic creation batch and unique operation record;
-validation failures also have durable rejected outcomes. `addStaff` is a separate
-non-financial, non-durable browser workflow: PINs are never put in pending storage
+validation failures also have durable rejected outcomes. `addStaff` and `updateStaff`
+are non-financial, non-durable browser workflows: PINs are never put in pending storage
 or a fast request hash. It retains scope-checked operation replay but has no full
-payload fingerprint. Recovery guarantees here primarily concern financial commands.
+payload fingerprint. Their changes/session revocation/audit/outcome still use the
+event revision and atomic batch. Display PINs are encrypted. Recovery guarantees here primarily concern financial commands.
 
 ## Outcome API and identity
 
@@ -67,6 +72,16 @@ stateDiagram-v2
   Pending --> Draft: Durable rejected outcome; retain unbooked basket
   Receipt --> Draft: Cashier explicitly starts next customer
 ```
+
+The v2 record also carries `priceUnit: 'tenths'`. Legacy euro input `25` becomes
+`250` atomically before adoption; cent-valued items, pending commands and receipts
+stay unchanged. A failed migration write blocks work. Old clients cannot safely
+interpret this new input record. Separate `validatedPendingId` provenance allows
+an original pre-upgrade cent command to resume unchanged. New HTTP commands carry
+`entryFormat: tenths-v1`. The API blocks unknown obsolete-client commands with an
+unrecorded `CLIENT_UPGRADE_REQUIRED`; stored outcomes remain available. A client
+checks an unmarked command's outcome but never blindly resubmits it when provenance
+is absent. This prevents cached euro-input code from scaling a migrated price.
 
 Adding/editing an item and clearing its input fields is also one write. If an
 intent cannot be stored, no request is sent. If storing a confirmed receipt fails,

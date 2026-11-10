@@ -17,7 +17,7 @@ The six-register characterization test allows a 409 contention result and verifi
 that explicit same-ID retry preserves exactly one sale. The service now uses
 twelve attempts with jitter; the historical five-attempt result remains in the
 dated report. **A passing characterization test does not mean the capacity gate passes.**
-A second test sends competing seller payouts and checks the till is debited once.
+A second test sends competing seller payouts and checks the pool is debited once.
 Recovery regression tests also cover immutable outcomes, changed-payload/actor
 rejection, schema upgrade, legacy sale verification and unknown-error classification.
 
@@ -44,14 +44,14 @@ original ID; there is no hidden retry for failures. The script restarts the
 server, checks persisted receipts/totals and a replay, and runs SQLite integrity
 and foreign-key checks plus operation/audit counts for the measured new sales.
 It deletes its temporary database/server logs. No external URL or existing
-database is accepted. All six sessions currently share the demo cashier account.
+database is accepted. All six sessions use distinct personal accounts assigned to their till.
 
 A failure exits nonzero. Timing is diagnostic; there is no calibrated CI timing
 threshold. Seed rows bypass the API and do not contain complete historical audit
 or operation records. New measured sales use the real HTTP route and service.
 The replay check ignores an already received response; it does not inject a
 network drop during commit. SIGTERM restart is not a power-cut test. Scheduled
-12-second polling, real browser rendering, unique staff identities and proxy
+12-second polling, real browser rendering and proxy
 traffic are not included; the harness performs a full refresh after each sale.
 
 Run both `pnpm run build:selfhost` and `pnpm run build` when shared runtime code
@@ -110,8 +110,7 @@ cashiers sharing six tills, and runs for one hour. Six clients operate for the
 first 45 minutes; twelve operate for the last 15. Each active client submits a
 five-item sale every ten seconds, reads the compact state, and replays every tenth
 command. The manager adds/removes cash every 30 seconds and voids a sale every two
-minutes. Online backup checks occur during load. Final seller payouts, till
-closures, stored receipt numbers, sale operation/audit counts and expected cash
+minutes. Online backup checks occur during load. Counted closures and pool payouts with separate ten-cent rounding, stored receipt numbers, sale operation/audit counts and expected cash
 are checked against a separately maintained ledger; a restart replay and isolated
 restore/write-fence check finish the run.
 
@@ -147,9 +146,29 @@ sudo python3 scripts/check-soak-ledger.py /srv/basarkasse-validation/scratch /sr
 This requires Python 3's standard library, not the application's money helpers.
 It waits for event closure, opens one read-only snapshot and checks every fixture
 receipt, the SHA-256 fingerprint of each new command against stored rows, each
-seller's gross/commission/net, cash movement/void/payout intent counts and all six
+seller's gross/commission/rounding/net, cash movement/void/payout intent counts and all six
 counted/expected cash balances. It also deliberately changes two in-memory payout
-amounts on the same till by opposite cents: global and till totals cancel, while
+amounts sharing a funding source by opposite cents: combined cash totals cancel, while
 the per-seller check must reject them. It never edits the database. A private
 synthetic fixture JSON is retained beside its summary for diagnosis; do not run
 this fixture-specific checker on real event data or publish its raw snapshot.
+
+## Event workflow regression evidence
+
+`tests/event-workflow.test.mjs` exercises actual SQLite/service/HTTP code: scoped
+full/compact reads, no cross-till turnover, fifty-cent validation, unique counted
+contributions, underfunded/competing pool payouts, separate rounding, staff/PIN
+revocation races, failed contribution rollback and historical migration. The
+browser suite covers numeric price entry, assigned login links, team editing/PIN
+privacy, counted settlement/float return and original-actor recovery from a wrong
+scoped session. It also verifies obsolete unmarked pending commands are checked
+without a sale POST. Original euro draft migration preserves cent-valued intent.
+
+The HTTP/soak harnesses use synthetic runtime PIN keys, personal assigned accounts
+and fifty-cent prices. The soak closes all tills before pooled payouts and
+reauthenticates after restored sessions are invalidated. Do not supply real keys
+or target event data to these disposable fixtures.
+
+See the [10 November results](results-event-workflow-2026-11-10.md) for 68 Node
+tests, 50 browser cases, the repeated 600-sale HTTP check and the local 130-second
+pool/independent-ledger run. Its macOS figures are not intended-server acceptance.

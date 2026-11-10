@@ -3,7 +3,8 @@
 This release is for protected evaluation with synthetic data. Default manager
 and cashier accounts and the demo-login API remain enabled. Changing a displayed
 PIN or hiding demo buttons would not remove those server-side capabilities.
-There is no supported production provisioning mode yet.
+There is no supported production provisioning mode yet. Event PIN editing does
+not make the public demo manager private.
 
 ## Current controls
 
@@ -22,12 +23,19 @@ There is no supported production provisioning mode yet.
 
 ## Outstanding controls before live use
 
-Implement production bootstrap, removal of demo access, PIN change, account
-suspension, session revocation and a recovery procedure for a locked-out manager.
-Define cashier read permissions: current authenticated snapshots expose all event
-sales, payouts, movements and recent audit entries, including to cashiers.
-Unauthenticated snapshots expose event metadata and active staff names.
-New staff PINs are excluded from browser pending storage and request fingerprints.
+Production bootstrap, removal of demo access and locked-out central manager
+recovery remain open. Event team editing, PIN reset/disable and session revocation
+are implemented. Cashier SQL reads/exports and commands are bound to their event/till;
+they do not receive other tills' sales/turnover or manager payout/pool/audit data.
+Unauthenticated protected snapshots expose selected event metadata and login names.
+
+PIN display is an explicit manager team response. Recoverable PINs use AES-256-GCM
+with `BASAR_TEAM_PIN_KEY` outside SQLite; login retains salted PBKDF2 verifiers.
+PINs are excluded from normal snapshots, pending storage, fingerprints and logs.
+Protect and separately back up the key; do not export decrypted PIN lists. Team
+changes revoke sessions and increment authorization version. Financial commit and
+session-issuance guards close reassignment/PIN-reset races. See
+[team operations](docs/operations/event-teams-and-settlement.md).
 Legacy unresolved staff commands require private technical review during upgrade.
 Financial commands now retain their ID through unknown outcomes and session expiry;
 actual device/storage and venue acceptance remain required. See

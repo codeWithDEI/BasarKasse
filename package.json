@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "build:selfhost": "next build --webpack",
     "start:selfhost": "node selfhost/start.mjs",
-    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts tests/register.test.ts && node --experimental-strip-types --test tests/service.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs && node --test tests/api-recovery.test.mjs tests/operations.test.mjs",
+    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts tests/register.test.ts && node --experimental-strip-types --test tests/service.test.mjs tests/event-workflow.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs && node --test tests/api-recovery.test.mjs tests/operations.test.mjs",
     "test:load": "node scripts/test-register-load.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test:recovery": "playwright test",
@@ -75,5 +75,6 @@
       "sharp": "0.35.5"
     }
   },
-  "packageManager": "pnpm@11.25.0"
+  "packageManager": "pnpm@11.25.0",
+  "license": "GPL-3.0-only"
 }

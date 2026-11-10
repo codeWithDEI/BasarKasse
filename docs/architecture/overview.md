@@ -31,9 +31,9 @@ second server will work as a supported high-availability arrangement.
 
 | Layer | Files | Responsibility |
 | --- | --- | --- |
-| Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts`, `lib/basar/login-form.tsx` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
+| Browser | `app/page.tsx`, `lib/basar/register.ts`, `lib/basar/use-register.ts`, `lib/basar/login-form.tsx`, `lib/basar/team-panel.tsx`, `lib/basar/pool-panel.tsx` | Basket entry, atomic browser recovery state, tab ownership, wake reconciliation and polling |
 | HTTP | `app/api/basar/route.ts`, `lib/basar/http.ts` | Origin, session cookie, JSON validation, GET/POST responses |
-| Service | `lib/basar/service.ts`, `lib/basar/operations.ts`, `lib/basar/queries.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
+| Service | `lib/basar/service.ts`, `lib/basar/operations.ts`, `lib/basar/queries.ts`, `lib/basar/access.ts`, `lib/basar/auth.ts`, `lib/basar/team.ts` | Authentication, commands, fingerprints, durable outcomes and optimistic transaction protocol |
 | Domain | `lib/basar/domain.ts` | Cent arithmetic, seller commission, till balance, item validation |
 | Schema | `db/schema.ts`, `drizzle/*.sql` | Drizzle definitions and applied SQL migrations |
 | Self-host runtime | `selfhost/*.mjs` | `node:sqlite`, migration startup, HTTP server, consistent backup |

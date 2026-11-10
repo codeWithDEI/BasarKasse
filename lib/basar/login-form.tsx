@@ -7,7 +7,7 @@ import {basarPath} from './paths';
 type Props={
   staff:Person[]; user:Person|null; preferredStaffId:string; requiredStaffId?:string;
   onBusyChange:(busy:boolean)=>void;
-  onAuthenticated:(staffId:string)=>Promise<void>;
+  onAuthenticated:(staffId:string,eventId?:string)=>Promise<void>;
   onLoggedOut:()=>Promise<void>;
 };
 
@@ -30,10 +30,10 @@ export function LoginForm({staff,user,preferredStaffId,requiredStaffId,onBusyCha
         body:JSON.stringify({action,staffId:id,...(action==='login'?{pin}:{})}),
         signal:AbortSignal.timeout(12000),
       });
-      const result=await response.json() as {error?:string};
+      const result=await response.json() as {error?:string;eventId?:string};
       if(!response.ok)throw new Error(result.error||'Die Anmeldung konnte nicht bestätigt werden.');
       setPin('');
-      if(action==='logout')await onLoggedOut();else await onAuthenticated(id);
+      if(action==='logout')await onLoggedOut();else await onAuthenticated(id,result.eventId);
     } catch(cause) {
       setPin('');
       setError(cause instanceof TypeError||(cause instanceof Error&&['TimeoutError','AbortError'].includes(cause.name))

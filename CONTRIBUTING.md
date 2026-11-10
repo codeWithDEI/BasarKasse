@@ -63,6 +63,13 @@ between Vinext and Next.js builds; do not edit `.next/` by hand.
 have not established a clean lint baseline. Do not describe lint as passing
 without running it. CI currently checks tests, TypeScript and both builds.
 
+## License
+
+Project contributions are licensed under GPL-3.0-only. Keep original copyright
+and third-party notices; submit only changes you are entitled to license under
+these terms. Do not include real PINs, runtime encryption keys or event data.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE.md).
+
 ## Pull requests and releases
 
 Describe the concrete before/after behavior, financial invariants affected,

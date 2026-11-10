@@ -29,6 +29,13 @@
       "when": 1794232850298,
       "tag": "0003_event_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794341197398,
+      "tag": "0004_event_workflow",
+      "breakpoints": true
     }
   ]
 }

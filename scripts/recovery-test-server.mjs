@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 const directory=mkdtempSync(join(tmpdir(),'basar-browser-'));
 process.env.BASAR_DATABASE=join(directory,'basar.sqlite');
+process.env.BASAR_TEAM_PIN_KEY='d2'.repeat(32); // Synthetic browser fixture key.
 process.env.HOSTNAME='127.0.0.1';process.env.PORT='3138';
 process.env.BASAR_PUBLIC_ORIGIN='http://127.0.0.1:3138';
 const {readFileSync}=await import('node:fs');

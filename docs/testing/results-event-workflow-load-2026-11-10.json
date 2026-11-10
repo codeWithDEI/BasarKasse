@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-11-10T21:06:42.915Z",
+  "runtime": {
+    "node": "v22.23.2",
+    "sqlite": "3.53.4",
+    "platform": "darwin",
+    "arch": "x64",
+    "logicalCpus": 12,
+    "memoryBytes": 25769803776
+  },
+  "workload": {
+    "registers": 6,
+    "seededSales": 5000,
+    "itemsPerSale": 5,
+    "newSales": 600,
+    "duplicateReplays": 61,
+    "refreshAfterEachSale": true
+  },
+  "results": {
+    "statuses": {
+      "200": 600
+    },
+    "elapsedSeconds": 8.285,
+    "salesPerSecond": 72.4,
+    "postMs": {
+      "p50": 42.1,
+      "p95": 65.1,
+      "max": 122
+    },
+    "refreshMs": {
+      "p95": 55.8
+    },
+    "finalStateBytes": 4000353,
+    "persistedSales": 5600,
+    "ledgerCents": 3203000,
+    "restartReplay": true,
+    "integrityCheck": "ok"
+  },
+  "limitations": [
+    "Local single-process Next.js/SQLite, not a browser or D1 test",
+    "No production CPU/memory quota or reverse proxy",
+    "No Wi-Fi fault, power cut, disk-full or browser storage fault injection",
+    "Six individually assigned cashier identities; no real tablets",
+    "Seed history bypasses API; measured new sales use HTTP"
+  ]
+}

@@ -10,6 +10,7 @@ FROM node:24-bookworm-slim
 WORKDIR /app
 ARG BASAR_REVISION=unrecorded
 ENV BASAR_REVISION=${BASAR_REVISION}
+LABEL org.opencontainers.image.licenses="GPL-3.0-only"
 LABEL org.opencontainers.image.revision=${BASAR_REVISION}
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 BASAR_DATABASE=/data/basarkasse.sqlite NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_BASE_PATH=""

@@ -1,12 +1,14 @@
 import type {Item} from './domain';
+import {parseMoney} from './domain.ts';
+import {CLIENT_ENTRY_FORMAT} from './client-version.ts';
 export type PendingCommand = {action:string;operationId:string;eventId:string;staffId:string;[key:string]:any};
 export type SaleReceipt={saleId:string;number:number;total:number;donation:number;received:number;change:number;payable:number};
 export type RegisterRecord = {
-  version:2; revision:number; eventId:string; tillId:string; lastStaffId:string; items:Item[];
+  version:2; priceUnit:'tenths'; validatedPendingId?:string; revision:number; eventId:string; tillId:string; lastStaffId:string; items:Item[];
   received:string; roundTo:string; seller:string; price:string; editing:string|null;
   lastSale:SaleReceipt|null; pending:PendingCommand|null;
 };
-export const emptyRegister=():RegisterRecord=>({version:2,revision:0,eventId:'',tillId:'',lastStaffId:'',items:[],received:'',roundTo:'',seller:'',price:'',editing:null,lastSale:null,pending:null});
+export const emptyRegister=():RegisterRecord=>({version:2,priceUnit:'tenths',revision:0,eventId:'',tillId:'',lastStaffId:'',items:[],received:'',roundTo:'',seller:'',price:'',editing:null,lastSale:null,pending:null});
 export const registerKey=(basePath:string)=>'basar-register-v2:'+ (basePath||'/');
 type StoragePort=Pick<Storage,'getItem'|'setItem'>;
 function validate(record:RegisterRecord) {
@@ -19,7 +21,17 @@ function validate(record:RegisterRecord) {
 }
 export function loadRegister(storage:StoragePort,key:string):RegisterRecord {
   const raw=storage.getItem(key);
-  if(raw!==null) return validate({lastStaffId:'',...JSON.parse(raw)});
+  if(raw!==null){
+    const record={lastStaffId:'',...JSON.parse(raw)};
+    if(record.priceUnit===undefined){
+      // Old v2 drafts interpreted '25' as EUR 25. Convert the input, never the cent-valued items or pending command.
+      const old=typeof record.price==='string'?parseMoney(record.price):null;
+      if(old!==null)record.price=String(old/10);
+      record.priceUnit='tenths';if(record.pending)record.validatedPendingId=record.pending.operationId;validate(record);storage.setItem(key,JSON.stringify(record));
+    }
+    if(record.priceUnit!=='tenths')throw new Error('Das gespeicherte Preisformat ist unbekannt. Bitte die Kassenleitung hinzuziehen.');
+    return validate(record);
+  }
   const device=JSON.parse(storage.getItem('basar-device-v1')||'{}');
   const draft=JSON.parse(storage.getItem('basar-draft-v1')||'null');
   const pending=JSON.parse(storage.getItem('basar-pending-v1')||'null');
@@ -31,6 +43,7 @@ export function loadRegister(storage:StoragePort,key:string):RegisterRecord {
     const p=record.pending,total=p.items.reduce((sum:number,i:Item)=>sum+i.price,0);
     Object.assign(record,{items:p.items,lastSale:null,received:(p.received/100).toFixed(2),roundTo:p.donation?((total+p.donation)/100).toFixed(2):''});
   } else if(record.lastSale) Object.assign(record,{items:[],received:'',roundTo:''});
+  if(record.pending)record.validatedPendingId=record.pending.operationId;
   validate(record);
   storage.setItem(key,JSON.stringify(record)); // Complete migration before adopting it; leave old evidence untouched.
   return record;
@@ -42,7 +55,7 @@ export function saveRegister(storage:StoragePort,key:string,record:RegisterRecor
 }
 export function confirmedRegister(record:RegisterRecord,command:PendingCommand,result:Record<string,any>):RegisterRecord {
   if(record.pending?.operationId!==command.operationId) throw new Error('Der offene Vorgang hat sich geändert. Bitte den Status erneut prüfen.');
-  let next={...record,pending:null};
+  let next={...record,pending:null,validatedPendingId:undefined};
   if(result.tillId) next.tillId=result.tillId;
   if(command.action==='sale') {
     const total=command.items.reduce((sum:number,item:Item)=>sum+item.price,0),donation=command.donation??0;
@@ -51,4 +64,9 @@ export function confirmedRegister(record:RegisterRecord,command:PendingCommand,r
   }
   if(command.action==='createEvent') next={...next,eventId:result.eventId,tillId:'',lastSale:null,items:[],received:'',roundTo:'',seller:'',price:'',editing:null};
   return next;
+}
+
+export function canResubmitPending(record:RegisterRecord){
+  const pending=record.pending;
+  return !!pending&&(pending.entryFormat===CLIENT_ENTRY_FORMAT||(pending.entryFormat===undefined&&record.validatedPendingId===pending.operationId));
 }
