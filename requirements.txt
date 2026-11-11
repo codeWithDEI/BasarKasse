@@ -1,0 +1,193 @@
+BASARKASSE — REQUIREMENTS AND IMPLEMENTATION REGISTER
+Updated: 2026-11-11
+Source: the owner's requirement.txt received on 2026-11-10 and subsequent
+clarifications (including the explicit GPL-3.0 license selection).
+
+Scope and status
+----------------
+This file is the canonical register for that requirements batch. It replaces
+the original informal requirement.txt; it is not a Python dependency list.
+
+IMPLEMENTED means the software change is merged, with the evidence below.
+It does not mean the application is approved to handle real event money.
+FIELD ACCEPTANCE OPEN means software evidence exists but physical-device or
+venue acceptance is still required. OPEN means acceptance evidence is missing.
+
+Implementation reference:
+  PR #5 — Bind event cashiers and settle counted tills through a shared cash pool
+  https://github.com/codeWithDEI/BasarKasse/pull/5
+  Status: merged; deployed to protected evaluation on 2026-11-11.
+  Merge/release: fdc02aa14388b20bd62c3592a55849b80703b276.
+
+Compatibility: pooled settlement and ten-cent payout rounding apply to NEW
+events. Existing events retain till-funded, cent-exact settlement. Historical
+sales, payout IDs and amounts must not be recomputed or reinterpreted.
+
+Operating assumption: the ENTIRE counted till contents, including opening
+float, enters the pool. Return floats through documented pool withdrawals.
+This implemented assumption still requires organizer cash-process sign-off.
+
+BK-REQ-001 — Article price increments
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: Every newly booked article price SHALL be a positive integer
+multiple of EUR 0.50. The server SHALL enforce this independently of the UI.
+Acceptance criteria:
+  - EUR 0.50, EUR 2.50 and EUR 6.50 are accepted.
+  - Zero, negative prices and non-fifty-cent prices are rejected without a
+    financial booking.
+Evidence: tests/event-workflow.test.mjs (parser and bypass-validation cases).
+
+BK-REQ-002 — Comma-free article price entry
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: Article input SHALL accept digits representing tenths of a euro,
+without a decimal separator, while preserving BK-REQ-001.
+Acceptance criteria:
+  - Input 5 means EUR 0.50; 25 means EUR 2.50; 65 means EUR 6.50.
+  - Cash received, checkout rounding, floats, counts and cash movements remain
+    ordinary euro inputs; 10 in the received-cash field means EUR 10.00.
+  - Upgrading an old euro draft preserves its value and pending operation ID;
+    obsolete clients cannot silently create a differently priced sale.
+Evidence: tests/event-workflow.test.mjs, tests/register.test.ts and
+tests/browser/recovery.spec.ts (price entry and obsolete-client recovery).
+
+BK-REQ-003 — Event- and till-bound cashier login
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: Each personal cashier account SHALL be assigned to one event
+and one till number. Cashiers SHALL NOT select another event or till.
+Acceptance criteria:
+  - The cashier UI locks event/till selection; forged cross-scope reads and
+    commands are also rejected by the server.
+  - A personal login link preselects the event/account without containing a PIN.
+  - An uncertain sale retains its original person and operation ID through
+    reauthentication; a different cashier cannot take over that command.
+Evidence: tests/event-workflow.test.mjs (scope and revocation race cases),
+tests/browser/recovery.spec.ts (assigned login and original-person recovery).
+
+BK-REQ-004 — Cashier turnover visibility
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: A cashier SHALL see sales and turnover only for the assigned
+till number within the assigned event, including other staff on that till.
+Acceptance criteria:
+  - Totals, history, receipt search and full exports exclude other tills/events.
+  - Management settlement, pool and audit data are not exposed to cashiers.
+Evidence: tests/event-workflow.test.mjs (full/compact/export scope),
+tests/browser/recovery.spec.ts (assigned-till turnover).
+
+BK-REQ-005 — Authorized manager PIN display
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: Authorized managers SHALL be able to explicitly reveal the PINs
+of their event team without exposing PINs in normal cashier/application state.
+Acceptance criteria:
+  - PIN display requires an explicit manager request; cashiers cannot access it.
+  - Recoverable PIN copies are encrypted using the separate runtime key;
+    login verification retains salted hashes.
+  - Plaintext PINs are absent from normal snapshots, browser recovery storage,
+    financial operation records and audit details.
+Evidence: tests/event-workflow.test.mjs (PIN privacy/key/session cases),
+tests/browser/recovery.spec.ts (explicit reveal and browser-storage checks).
+
+BK-REQ-006 — Counted till closure into a shared cash pool
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: For a pooled event, sales SHALL end before till closure. Every
+opened till SHALL be counted and closed before seller payouts are permitted.
+Acceptance criteria:
+  - The actual count, including float, is recorded; a difference needs a note.
+  - Closure and exactly one counted contribution to the event pool commit
+    atomically. Repeating the same operation does not add cash again.
+  - Failure to store the contribution rolls back the closure and its outcome.
+Evidence: tests/event-workflow.test.mjs (closure, rollback and replay cases),
+tests/browser/recovery.spec.ts (count-before-payout workflow).
+
+BK-REQ-007 — Seller payout from the event pool
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: For a pooled event, the manager SHALL pay each seller number's
+claim from the shared event pool after all opened tills have closed.
+Acceptance criteria:
+  - At most one payout is recorded per event/seller; exact replay is harmless.
+  - Competing payouts and documented withdrawals cannot overdraw the pool.
+  - Float returns are explicit withdrawals with an amount, actor and reason.
+Evidence: tests/event-workflow.test.mjs, tests/concurrency.test.mjs and
+tests/browser/recovery.spec.ts (pooled payout and float return).
+
+BK-REQ-008 — Ten-cent seller payout rounding
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: For a pooled event, the seller's claim after commission SHALL be
+rounded DOWN to whole ten-cent amounts. The remainder SHALL benefit the bazaar
+and SHALL be recorded separately from commission and checkout donations.
+Acceptance criteria:
+  - At 15% commission, EUR 6.50 gross yields EUR 0.98 commission,
+    EUR 0.02 rounding donation and EUR 5.50 payout.
+  - Persistence, seller statements and CSV show the separate rounding amount;
+    gross = commission + rounding donation + net payout.
+  - Existing historical payouts retain their original cent amounts.
+Evidence: tests/event-workflow.test.mjs (rounding, pool and migration cases),
+tests/browser/recovery.spec.ts and the independent ledger report below.
+
+BK-REQ-009 — Editable event-specific teams
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: Authorized managers SHALL manage their event team, including
+name, role, fixed till assignment, PIN reset and enabled/disabled state.
+Acceptance criteria:
+  - An event manager cannot edit another event's team or global setup accounts.
+  - Editing retains staff identity/history and revokes that person's sessions.
+  - A concurrent stale login or booking cannot bypass changed authorization.
+Evidence: tests/event-workflow.test.mjs (team, reset and authorization races),
+tests/browser/recovery.spec.ts (team creation and editing).
+
+BK-REQ-010 — Open-source license
+Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Requirement: The repository SHALL declare the owner's selected GPL-3.0-only
+license, provide its complete text and preserve third-party notices.
+Acceptance criteria:
+  - LICENSE, public/LICENSE.txt and package.json consistently declare GPL-3.0.
+    The SPDX identifier in package.json is GPL-3.0-only.
+  - NOTICE.md retains the separate attribution; the UI links license/source.
+Evidence: LICENSE, public/LICENSE.txt, NOTICE.md, package.json and Dockerfile.
+
+BK-REQ-011 — Mixed Android/iOS tablets
+Status: IMPLEMENTED IN SOFTWARE; FIELD ACCEPTANCE OPEN.
+Implementation: PR #5 (merged); physical acceptance is not claimed by that PR.
+Requirement: The checkout and recovery workflow SHALL support the actual
+Android and iOS tablets/browsers selected for the event.
+Acceptance criteria:
+  - Automated Chromium Android-tablet and WebKit iPad scenarios pass.
+  - All six physical tablets pass screen lock, PIN reauthentication, tab
+    reopening, interrupted requests/replies and reconnect without duplicate
+    financial effects, using their assigned accounts and the venue network.
+Evidence: 50 automated browser cases passed. The owner confirmed a mixed fleet;
+device/browser versions and a signed physical rehearsal report remain missing.
+Follow-up: docs/operations/register-recovery.md and
+docs/production-readiness.md (PR-01 and PR-07 are gate IDs, not pull requests).
+
+BK-REQ-012 — Venue network and server reachability
+Status: OPEN — external operating prerequisite, not a software implementation.
+Implementation PR: not applicable; no PR establishes venue connectivity.
+Requirement: All six tills SHALL have reliable network/Internet access to the
+external Ubuntu server throughout checkout. Local WLAN alone is insufficient.
+Acceptance criteria:
+  - Verify HTTPS access, simultaneous checkout and reconnect at the venue.
+  - Record the result, technical owner and agreed connectivity fallback.
+Evidence: the owner reports WLAN is available; Internet/end-to-end acceptance
+has not been completed. Offline checkout is not implemented.
+Follow-up: docs/production-readiness.md (gate PR-07) and
+docs/operations/event-day.md.
+
+Verification and traceability
+----------------------------
+PR #5 passed 68 Node tests, 50 browser cases, both runtime builds and type
+checking. The six-account HTTP run committed 600 sales. An additional local
+six/twelve-client run independently reconciled 10,972 receipts, 150 payouts
+and six counted pool contributions; it was not a four-hour field rehearsal.
+
+Detailed results: docs/testing/results-event-workflow-2026-11-10.md
+Independent ledger: docs/testing/results-event-workflow-ledger-2026-11-10.json
+Merged-commit CI:
+  https://github.com/codeWithDEI/BasarKasse/actions/runs/42919877037
+Operator workflow: docs/operations/event-teams-and-settlement.md
+Release gates: docs/production-readiness.md
+
+Summary: BK-REQ-001..010 implemented in merged PR #5. BK-REQ-011 has software
+evidence but open physical acceptance. BK-REQ-012 remains an external acceptance
+task. Production bootstrap/removal of public demo access, central manager
+recovery and event sign-off remain separate release gates. This documentation
+does not turn protected evaluation into production approval.
