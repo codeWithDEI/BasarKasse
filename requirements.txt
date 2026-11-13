@@ -1,15 +1,18 @@
 BASARKASSE — REQUIREMENTS AND IMPLEMENTATION REGISTER
-Updated: 2026-11-11
+Updated: 2026-11-13
 Source: the owner's requirement.txt received on 2026-11-10 and subsequent
 clarifications (including the explicit GPL-3.0 license selection).
 
 Scope and status
 ----------------
-This file is the canonical register for that requirements batch. It replaces
+This file is the canonical register for that batch and later owner requests.
+It replaces
 the original informal requirement.txt; it is not a Python dependency list.
 
 IMPLEMENTED means the software change is merged, with the evidence below.
 It does not mean the application is approved to handle real event money.
+IMPLEMENTED IN PR; MERGE PENDING means code is ready for review but is not yet
+a merged/released feature.
 FIELD ACCEPTANCE OPEN means software evidence exists but physical-device or
 venue acceptance is still required. OPEN means acceptance evidence is missing.
 
@@ -172,6 +175,28 @@ has not been completed. Offline checkout is not implemented.
 Follow-up: docs/production-readiness.md (gate PR-07) and
 docs/operations/event-day.md.
 
+BK-REQ-013 — QR transfer of personal login links
+Status: IMPLEMENTED IN PR; MERGE AND DEPLOYMENT PENDING.
+Implementation: PR #7 (open for review).
+  https://github.com/codeWithDEI/BasarKasse/pull/7
+Requirement: Managers SHALL be able to display a locally generated QR code for
+an enabled, event-assigned team member, copy the same URL and save it as PNG.
+Acceptance criteria:
+  - The card identifies the person, role/till and event; the code contains only
+    the deployment address plus event/staff IDs, with no PIN or session token.
+  - No URL is sent to an external QR service. The decoded code matches the
+    selectable link, stays fully visible and square on both tablet layouts,
+    and the downloaded PNG is valid.
+  - A signed-out tablet still requires its personal PIN and any outer website
+    access. Existing authenticated identities and drafts/pending commands are
+    not silently replaced by scanning a different account's link.
+  - Account edits/event changes clear the previous card; disabled/unassigned
+    accounts do not offer a code; manual copying remains available.
+Evidence: PR #7 passed 68 Node tests and 56 Chromium/WebKit browser cases locally,
+including independent QR pixel decoding, PNG download, clipboard refusal, PIN
+login and draft preservation; both builds and explicit typecheck passed.
+Actual camera scanning remains part of BK-REQ-011 field acceptance.
+
 Verification and traceability
 ----------------------------
 PR #5 passed 68 Node tests, 50 browser cases, both runtime builds and type
@@ -190,4 +215,5 @@ Summary: BK-REQ-001..010 implemented in merged PR #5. BK-REQ-011 has software
 evidence but open physical acceptance. BK-REQ-012 remains an external acceptance
 task. Production bootstrap/removal of public demo access, central manager
 recovery and event sign-off remain separate release gates. This documentation
-does not turn protected evaluation into production approval.
+does not turn protected evaluation into production approval. BK-REQ-013 is
+implemented in PR #7 and awaits review, merge and deployment.
