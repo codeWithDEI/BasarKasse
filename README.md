@@ -18,7 +18,7 @@ See the [production readiness gates](docs/production-readiness.md) and
 - Fifty-cent article prices without comma (`5` = EUR 0.50, `25` = EUR 2.50).
 - Integer-cent accounting; separate commission, tips and ten-cent payout rounding.
 - Full-sale voids, counted till closure into a cash pool, movements and seller payouts.
-- Editable event teams, manager PIN display, personal login links and session revocation.
+- Editable event teams, manager PIN display, personal login links/QR codes and session revocation.
 - Central persistence, operation IDs for replay protection, atomic booking batches.
 - Indexed command reads, database-enforced receipt/open-till uniqueness and paged
   sale history with whole-event totals.

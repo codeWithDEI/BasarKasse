@@ -39,12 +39,27 @@ Never put keys, PIN lists or decrypted responses in Git or browser recovery stor
    cashier one till number. An event manager is bound to this event. A person
    working another event gets a separate event account.
 3. Use **PINs anzeigen** privately. **Anmeldelink anzeigen** provides an event/person
-   URL without a PIN. Open it on an idle tablet to preselect the name and event.
+   URL and a locally generated QR code without a PIN or session credential. The
+   card identifies the person, assigned till and event. Scan it with the target
+   tablet's camera, use **Link kopieren**, or save a PNG with **QR-Code speichern**.
+   No URL is sent to an external QR service. Open it on a signed-out, idle tablet to
+   preselect the name and event; the personal PIN is still required. The existing
+   protected website may first ask for its separate access credentials.
    Never clear site data to apply a link: an existing draft/pending command has
    priority and is not moved to the link's event.
 4. Enter the personal PIN and open the assigned till with its float. Cashiers
    cannot change event/till. Their turnover, history, searches and full exports
    include only that till number.
+
+Links/QR codes are optional setup aids, not passwords or authentication tokens.
+They do not replace an existing authenticated identity; sign out deliberately
+only after resolving open work when preparing a tablet for another person.
+They contain the current origin/base path and event/staff IDs, with no fixed till
+parameter: the server uses the account's current assignment. Update prepared codes
+if the deployment address or account identity changes, and refresh any printed
+assignment labels after reassignment. Disabled/unassigned accounts
+do not offer a code; changing events or editing an account closes the previous
+card. Use the retained manual link if camera scanning/clipboard access is unavailable.
 
 The same editor changes name, role, assigned till, PIN or enabled state. Saving
 revokes that person's sessions. Resolve active tablet work **before** changing

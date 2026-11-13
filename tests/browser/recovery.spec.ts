@@ -1,6 +1,7 @@
 import {test,expect,type BrowserContext,type Page} from '@playwright/test';
 import {emptyRegister,registerKey} from '../../lib/basar/register';
 import {readFileSync} from 'node:fs';
+import jsQR from 'jsqr';
 const basePath=JSON.parse(readFileSync('.next/required-server-files.json','utf8')).config.basePath;
 const key=registerKey(basePath),origin='http://127.0.0.1:3138',api=origin+basePath+'/api/basar';
 async function setup(context:BrowserContext,page:Page) {
@@ -62,6 +63,57 @@ test('a personal event login link preselects the cashier and needs only its PIN 
  await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();
  await expect(page.locator('.profile')).toContainText('Fixture cashier');await expect(page.getByRole('combobox',{name:'Veranstaltung wählen'})).toBeDisabled();
  expect((await fixture.state()).user).toMatchObject({id:fixture.cashierId,event_id:fixture.eventId,till_number:1});
+});
+
+async function decodedLoginQr(page:Page) {
+ const pixels=await page.locator('.login-qr-code').evaluate((canvas:HTMLCanvasElement)=>({width:canvas.width,height:canvas.height,data:Array.from(canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height).data)}));
+ return jsQR(new Uint8ClampedArray(pixels.data),pixels.width,pixels.height)?.data;
+}
+
+test('personal login QR pixels decode to only the scoped URL, download as PNG, and still require a PIN',async({context,page})=>{
+ const fixture=await setup(context,page);await page.getByRole('button',{name:'Verwaltung',exact:true}).click();
+ const member=page.locator('.team-list > div').filter({hasText:'Fixture cashier'});await expect(member).toBeVisible();
+ const foreignRequests:string[]=[];page.on('request',request=>{if(new URL(request.url()).origin!==origin)foreignRequests.push(request.url());});
+ await member.getByRole('button',{name:'Anmeldelink anzeigen',exact:true}).click();
+ const card=page.getByRole('region',{name:'Persönlicher Anmeldelink'});await expect(card).toContainText('Kasse 1');await expect(card).toContainText('persönliche PIN bleibt erforderlich');
+ const link=origin+basePath+'/?'+new URLSearchParams({event:fixture.eventId,staff:fixture.cashierId});
+ await expect(card.getByRole('textbox',{name:'Anmeldelink für dieses Tablet',exact:true})).toHaveValue(link);
+ await expect.poll(()=>decodedLoginQr(page)).toBe(link);
+ const qrBounds=await page.locator('.login-qr-code').boundingBox(),cardBounds=await card.boundingBox();if(!qrBounds||!cardBounds)throw new Error('QR layout unavailable');
+ expect(qrBounds.x).toBeGreaterThanOrEqual(cardBounds.x+12);expect(qrBounds.x+qrBounds.width).toBeLessThanOrEqual(cardBounds.x+cardBounds.width-12);expect(qrBounds.width/qrBounds.height).toBeCloseTo(1,2);
+ await card.screenshot({path:test.info().outputPath('personal-login-qr.png')});
+ const url=new URL(link);expect([...url.searchParams.keys()]).toEqual(['event','staff']);expect(url.username+url.password+url.hash).toBe('');expect(foreignRequests).toEqual([]);
+ await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('Synthetic clipboard refusal');}}}));
+ await card.getByRole('button',{name:'Link kopieren',exact:true}).click();await expect(card.getByRole('status')).toContainText('im Feld markieren und kopieren');
+ const downloaded=page.waitForEvent('download');await card.getByRole('button',{name:'QR-Code speichern',exact:true}).click();const download=await downloaded;
+ expect(download.suggestedFilename()).toBe('basarkasse-kasse-1-'+fixture.cashierId+'.png');const stream=await download.createReadStream();if(!stream)throw new Error('Missing PNG download');
+ const chunks:Buffer[]=[];for await(const chunk of stream)chunks.push(Buffer.from(chunk));expect(Buffer.concat(chunks).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+ await context.clearCookies();await page.goto(link);await page.getByRole('button',{name:'Anmelden & Kasse öffnen',exact:true}).click();
+ await expect(page.locator('.login-person')).toContainText('Fixture cashier');await expect(page.getByLabel('Persönliche PIN',{exact:true})).toBeVisible();
+ await page.getByLabel('Persönliche PIN',{exact:true}).fill('1234');await page.getByRole('button',{name:'Weiterarbeiten',exact:true}).click();await expect(page.locator('.profile')).toContainText('Fixture cashier');
+});
+
+test('QR selection follows the chosen person, closes after account editing, and clears when the event changes',async({context,page})=>{
+ const fixture=await setup(context,page),second=crypto.randomUUID();await fixture.post('addStaff',{eventId:fixture.eventId,operationId:second,name:'Second QR cashier',role:'cashier',tillNumber:2,pin:'4826'});
+ await page.getByRole('button',{name:'Verwaltung',exact:true}).click();
+ await page.locator('.team-list > div').filter({hasText:'Fixture cashier'}).getByRole('button',{name:'Anmeldelink anzeigen',exact:true}).click();
+ await expect.poll(()=>decodedLoginQr(page)).toContain('staff='+fixture.cashierId);
+ let member=page.locator('.team-list > div').filter({hasText:'Second QR cashier'});await member.getByRole('button',{name:'Anmeldelink anzeigen',exact:true}).click();
+ await expect.poll(()=>decodedLoginQr(page)).toContain('staff='+second);await expect(page.locator('.login-link-card')).toContainText('Kasse 2');
+ await member.getByRole('button',{name:'Second QR cashier bearbeiten',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByLabel('Zugang deaktivieren',{exact:true}).check();await dialog.getByRole('button',{name:'Änderungen speichern',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.login-link-card')).toHaveCount(0);member=page.locator('.team-list > div').filter({hasText:'Second QR cashier'});await expect(member.getByRole('button',{name:'Anmeldelink anzeigen',exact:true})).toHaveCount(0);
+ const other=(await fixture.post('createEvent',{eventId:fixture.eventId,name:'Another QR event',date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:2})).eventId;
+ await page.reload();await page.getByRole('button',{name:'Verwaltung',exact:true}).click();await page.locator('.team-list > div').filter({hasText:'Fixture cashier'}).getByRole('button',{name:'Anmeldelink anzeigen',exact:true}).click();await expect(page.locator('.login-qr-code')).toBeVisible();
+ await page.getByRole('combobox',{name:'Veranstaltung wählen'}).selectOption(other);await expect(page.locator('.login-link-card')).toHaveCount(0);await expect(page.locator('.team-list')).not.toContainText('Fixture cashier');
+});
+
+test('opening a different personal login link preserves an existing checkout draft',async({context,page})=>{
+ const fixture=await setup(context,page);await page.getByRole('button',{name:'Verwaltung',exact:true}).click();await page.locator('.team-list > div').filter({hasText:'Fixture cashier'}).getByRole('button',{name:'Anmeldelink anzeigen',exact:true}).click();
+ await expect.poll(()=>decodedLoginQr(page)).toBeDefined();const link=await decodedLoginQr(page);expect(link).toBeTruthy();await page.getByRole('button',{name:'Anmeldelink schließen',exact:true}).click();await expect(page.locator('.login-link-card')).toHaveCount(0);
+ await page.getByRole('button',{name:'Kasse',exact:true}).click();await basket(page);const before=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);
+ await page.goto(link!);await expect(page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true})).toHaveValue('10');
+ const after=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);
+ for(const field of ['eventId','tillId','lastStaffId','items','received','roundTo'])expect(after[field]).toEqual(before[field]);expect((await fixture.state()).sales).toHaveLength(0);
 });
 
 test('an unmarked pending command from an obsolete client is checked but never blindly resubmitted after price migration',async({context,page})=>{
