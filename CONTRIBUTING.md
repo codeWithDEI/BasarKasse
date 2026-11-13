@@ -81,5 +81,6 @@ conflict is not a successful capacity acceptance test.
 A maintainer reviews and merges changes. Deploy a reviewed exact revision, back
 up before migrations and record image/revision, schema state and recovery plan.
 Do not deploy or load-test against an event containing real money as part of a PR.
-See [release gates](docs/production-readiness.md). The project license and external
-contributor policy still require an owner decision before general contributions.
+See [release gates](docs/production-readiness.md) and maintain requirement status
+and PR traceability in [the requirements register](requirements.txt). GPL-3.0-only
+is selected; external contribution policy and maintainers still need an owner decision.

@@ -120,6 +120,7 @@ No ChatGPT account or WordPress installation is required for self-hosting.
 | Document | Purpose |
 | --- | --- |
 | [Contributing](CONTRIBUTING.md) | Setup, change workflow, review and validation |
+| [Requirements register](requirements.txt) | Stable IDs, acceptance criteria, implementation PRs and open field checks |
 | [Architecture overview](docs/architecture/overview.md) | Components, deployment choices and boundaries |
 | [Teams and pooled settlement](docs/operations/event-teams-and-settlement.md) | PIN key, assigned login, counts and rounding |
 | [Domain and data model](docs/architecture/domain-model.md) | Money, event lifecycle, roles and schema |
