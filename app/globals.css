@@ -31,6 +31,17 @@
 .team-pin { display:block; margin-top:6px; font-variant-numeric:tabular-nums; letter-spacing:.04em; }
 .team-checkbox { display:flex; align-items:center; gap:10px; margin:18px 0; }
 .team-checkbox input { width:18px; height:18px; }
+.login-link-card { margin:20px 0; padding:18px; border:1px solid var(--border); border-radius:14px; background:#fafcf6; min-width:0; }
+.login-link-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.login-link-heading h3 { font-size:15px; color:var(--ink); overflow-wrap:anywhere; }
+.login-link-heading p { font-size:11px; line-height:1.7; color:#69785c; margin-top:5px; overflow-wrap:anywhere; }
+.login-link-heading .icon-button { flex-shrink:0; }
+.login-qr-code { display:block; margin:18px auto; background:#fff; }
+.login-link-help { font-size:12px; line-height:1.8; margin-bottom:15px; color:#56654c; }
+.login-link-card .field input { min-width:0; font-size:12px; }
+.login-link-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.login-link-actions .button { flex:1 1 140px; }
+.login-link-message { min-height:1.7em; font-size:11px; line-height:1.7; color:#56654c; }
 .pool-panel { padding:26px; margin-bottom:24px; }
 .pool-panel .section-heading p { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
 .pool-totals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; margin:24px 0; }
