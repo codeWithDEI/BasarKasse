@@ -119,6 +119,34 @@ def check(plan):
     return status
 
 
+
+def verify_public_installation(base, installation_id):
+    # The app's backend network is intentionally internal. Probe public HTTPS
+    # from the host without granting the app container outbound Internet access.
+    script = """import json, sys, urllib.request, urllib.error
+base, expected = sys.argv[1:]
+def request(path, payload=None):
+    data = None if payload is None else json.dumps(payload).encode()
+    headers = {} if payload is None else {'Origin':'https://roetgesportal.de','Content-Type':'application/json'}
+    req = urllib.request.Request(base+path, data=data, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+status, access = request('/api/basar?view=access')
+if status != 200 or access.get('mode') != 'production' or access.get('phase') != 'live' or access.get('installationId') != expected or access.get('device') is not None:
+    raise ValueError('Public installation mismatch')
+if request('/api/basar')[0] != 403:
+    raise ValueError('Anonymous API was not denied')
+status, denied = request('/api/basar', {'action':'demo','staffId':'demo-leitung'})
+if status != 403 or denied.get('code') != 'DEMO_DISABLED':
+    raise ValueError('Demo login was not denied')
+print('Public production metadata/access checks passed')
+"""
+    run('python3', '-c', script, base, installation_id)
+
+
 def activate(plan, approval):
     verify_approval(approval, plan)
     status = check(plan)
@@ -140,8 +168,7 @@ def activate(plan, approval):
         published = True
         run('docker', 'exec', PROXY, 'caddy', 'reload', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile')
         base = 'https://roetgesportal.de/basarkasse'
-        script = """const base=process.argv[1],id=process.argv[2];const r=await fetch(base+'/api/basar?view=access',{signal:AbortSignal.timeout(15000)}),a=await r.json();if(r.status!==200||a.mode!=='production'||a.phase!=='live'||a.installationId!==id||a.device!==null)throw Error('Public installation mismatch');if((await fetch(base+'/api/basar')).status!==403)throw Error('Anonymous API was not denied');const d=await fetch(base+'/api/basar',{method:'POST',headers:{Origin:'https://roetgesportal.de','Content-Type':'application/json'},body:JSON.stringify({action:'demo',staffId:'demo-leitung'})});if(d.status!==403||(await d.json()).code!=='DEMO_DISABLED')throw Error('Demo login was not denied');console.log('Public production metadata/access checks passed');"""
-        run('docker', 'exec', CONTAINER, 'node', '--input-type=module', '-e', script, base, plan['installationId'])
+        verify_public_installation(base, plan['installationId'])
         final = database()
         atomic(record / 'result.json', (json.dumps({'ok': True, 'activatedAt': datetime.now(timezone.utc).isoformat(), 'revision': plan['revision'], 'imageId': plan['imageId'], 'installationId': status['installationId'], 'counts': final['counts']}, indent=2)+'\n').encode())
         return {'publicProduction': True, 'revision': plan['revision'], 'installationId': status['installationId']}
