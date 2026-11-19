@@ -78,6 +78,12 @@ The production Mac agent is `de.basarkasse.production-backup`, every five minute
 Keep the Mac powered, awake, unlocked as needed and network-connected; the dashboard
 marks stale or failed copies. Use the existing [backup/restore runbook](monitoring-and-backups.md).
 
+Start the prepared application before the first read-only-volume snapshot so
+SQLite can create its WAL/shared-memory sidecars. This does not seed demo data
+or enable financial writes. Backups of a stopped WAL database need the relevant
+sidecars or a separately controlled writable-source context; do not silently
+change the live backup mount to writable.
+
 Before Go, require a verified server snapshot, matching Mac copy, separately
 preserved key and isolated restore drill. The snapshot contains credential hashes
 and encrypted cashier PINs but remains sensitive. File permissions and SSH transport

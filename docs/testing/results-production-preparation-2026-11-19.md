@@ -7,7 +7,7 @@ Go. This report is evidence for software behavior, not event acceptance.
 ## Local results
 
 - 86 Node tests passed (including 14 production provisioning/access/revocation/
-  restore tests and the evaluation-draft isolation regression).
+  restore tests the evaluation-draft isolation regression and cached-evaluation-tab write fence).
 - Five Python deployment tests passed: candidate-only validation, invalid/stale Go,
   changed route/nonempty DB/stale backup refusal, ordered success and failure
   preserving data while pausing writes/restoring the previous route.
@@ -31,8 +31,40 @@ Go. This report is evidence for software behavior, not event acceptance.
 
 Local Node 22.23.2 / SQLite 3.53.4 on macOS under Rosetta; browser/server fixtures
 own disposable databases and never mount or write to the prepared production DB.
-The production profile is intended for Node 24 on Ubuntu. Server staging, quota
-workload and backup/restore results will be appended after validation.
+The private Ubuntu candidate runs Node 24.22.3 / SQLite 3.54.1, WAL and FULL
+synchronous mode, with no public port. Candidate image:
+`sha256:4ff20ab50082c05bd48824179c901ca0e35c6447a510bb0b63ca1a79e4db6ea0`;
+runtime revision `33bab6a663482d217d97e43f6e4958d8344e545b`.
+
+## Private intended-server preparation
+
+A separate volume/key now contains one prepared event, six cashier accounts, one
+manager and seven unconsumed device invitations. All financial/operation tables
+are empty; one setup audit entry is expected. Production writes remain paused.
+The imported evaluation route and six existing container images/start times were
+verified unchanged. Public access still returns the evaluation authentication gate.
+
+The separate candidate Caddy configuration validated without a reload. A false
+approval template was refused and created no launch record. Server and Mac
+five-minute backup channels were installed independently of evaluation. A fresh
+off-host snapshot passed SHA/integrity/ledger checks. Its isolated restore
+retained the matching installation, changed epoch, paused writes, revoked all
+devices/sessions and successfully verified a cashier verifier using the separately
+preserved key without exporting any real PIN. See the [restore proof](restore-production-proof-2026-11-19.json).
+The restored test copy was deleted after verification.
+
+The initial read-only snapshot before application startup could not create WAL
+sidecars. Starting the prepared service and retrying the backup resolved it;
+subsequent server/Mac verification passed. Provisioning remains financially empty.
+
+[PR #9](https://github.com/codeWithDEI/BasarKasse/pull/9) records the final intended-server
+quota workload status/counters as release-review evidence. That workload uses a
+separate no-network container, one CPU/768 MiB, 10,000 seed receipts and six then
+twelve simulated sessions. Neither its database nor its fixture key is the
+prepared production volume/key. It does not close the four-hour/field gates.
+
+The exact runtime candidate passed [GitHub validation](https://github.com/codeWithDEI/BasarKasse/actions/runs/44615361639);
+later documentation-only evidence changes do not change its executable tree.
 
 ## Remaining acceptance
 
