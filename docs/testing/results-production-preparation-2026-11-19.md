@@ -58,10 +58,19 @@ sidecars. Starting the prepared service and retrying the backup resolved it;
 subsequent server/Mac verification passed. Provisioning remains financially empty.
 
 [PR #9](https://github.com/codeWithDEI/BasarKasse/pull/9) records the final intended-server
-quota workload status/counters as release-review evidence. That workload uses a
+quota workload status/counters as release-review evidence. The persistent-storage
+workload uses a
 separate no-network container, one CPU/768 MiB, 10,000 seed receipts and six then
 twelve simulated sessions. Neither its database nor its fixture key is the
 prepared production volume/key. It does not close the four-hour/field gates.
+
+A separate 15-minute CPU/control-flow run used tmpfs storage: 681 new sales,
+76 exact replays, seven voids, 150 payouts, independent ledger reconciliation,
+restart and restore fencing passed. These latency numbers do **not** measure
+the host disk. It is recorded separately from the repeat on a dedicated host
+filesystem scratch directory (`TMPDIR=/scratch`), on the same filesystem as
+the production volume but with no production volume mounted. The final
+persistent-storage result is recorded in PR #9.
 
 The exact runtime candidate passed [GitHub validation](https://github.com/codeWithDEI/BasarKasse/actions/runs/44615361639);
 later documentation-only evidence changes do not change its executable tree.

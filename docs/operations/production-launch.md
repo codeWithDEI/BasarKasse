@@ -107,6 +107,12 @@ SOAK_MODE=production SOAK_SECONDS=3600 SOAK_SEED_SALES=10000 \
   SOAK_REPORT=/tmp/production-soak.json pnpm run test:soak
 ```
 
+When running the harness in a read-only Docker container, bind a separate
+persistent host scratch directory to `/scratch` and set `TMPDIR=/scratch`. Never
+mount the actual production data volume. A database under a tmpfs `/tmp` measures
+CPU/control flow and RAM storage, not the persistent SQLite fsync path. Record
+the effective backing filesystem along with the quotas.
+
 Use the exact image and intended one-CPU/768-MiB limits. This measures synthetic
 HTTP traffic, not real tablets, Wi-Fi, HTTPS rendering or power loss.
 
