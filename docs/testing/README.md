@@ -159,10 +159,13 @@ this fixture-specific checker on real event data or publish its raw snapshot.
 full/compact reads, no cross-till turnover, fifty-cent validation, unique counted
 contributions, underfunded/competing pool payouts, separate rounding, staff/PIN
 revocation races, failed contribution rollback and historical migration. The
-browser suite covers numeric price entry, assigned login links, team editing/PIN
+browser suite covers ordinary euro price entry/editing, assigned login links, team editing/PIN
 privacy, counted settlement/float return and original-actor recovery from a wrong
 scoped session. It also verifies obsolete unmarked pending commands are checked
-without a sale POST. Original euro draft migration preserves cent-valued intent.
+without a sale POST. Tenths draft migration preserves cent-valued intent; original
+unmarked euro inputs are not scaled again. Invalid tenths text requires explicit
+re-entry. Both not-yet-booked and already-committed tenths pending sales recover
+the original ID/cents, with no duplicate booking after the input upgrade.
 
 The HTTP/soak harnesses use synthetic runtime PIN keys, personal assigned accounts
 and fifty-cent prices. The soak closes all tills before pooled payouts and
@@ -172,3 +175,6 @@ or target event data to these disposable fixtures.
 See the [10 November results](results-event-workflow-2026-11-10.md) for 68 Node
 tests, 50 browser cases, the repeated 600-sale HTTP check and the local 130-second
 pool/independent-ledger run. Its macOS figures are not intended-server acceptance.
+
+See [ordinary euro input results](results-euro-entry-2026-11-19.md) for the
+subsequent price-format change and upgrade/recovery checks.

@@ -1,5 +1,5 @@
 BASARKASSE — REQUIREMENTS AND IMPLEMENTATION REGISTER
-Updated: 2026-11-13
+Updated: 2026-11-19
 Source: the owner's requirement.txt received on 2026-11-10 and subsequent
 clarifications (including the explicit GPL-3.0 license selection).
 
@@ -41,7 +41,8 @@ Acceptance criteria:
 Evidence: tests/event-workflow.test.mjs (parser and bypass-validation cases).
 
 BK-REQ-002 — Comma-free article price entry
-Status: IMPLEMENTED. Implementation: PR #5 (merged).
+Status: SUPERSEDED by BK-REQ-014 at the owner's request on 2026-11-19.
+Historical implementation: PR #5 (merged). The following records that old contract.
 Requirement: Article input SHALL accept digits representing tenths of a euro,
 without a decimal separator, while preserving BK-REQ-001.
 Acceptance criteria:
@@ -176,8 +177,8 @@ Follow-up: docs/production-readiness.md (gate PR-07) and
 docs/operations/event-day.md.
 
 BK-REQ-013 — QR transfer of personal login links
-Status: IMPLEMENTED IN PR; MERGE AND DEPLOYMENT PENDING.
-Implementation: PR #7 (open for review).
+Status: IMPLEMENTED.
+Implementation: PR #7 (merged; deployed to protected evaluation on 2026-11-13).
   https://github.com/codeWithDEI/BasarKasse/pull/7
 Requirement: Managers SHALL be able to display a locally generated QR code for
 an enabled, event-assigned team member, copy the same URL and save it as PNG.
@@ -197,6 +198,27 @@ including independent QR pixel decoding, PNG download, clipboard refusal, PIN
 login and draft preservation; both builds and explicit typecheck passed.
 Actual camera scanning remains part of BK-REQ-011 field acceptance.
 
+BK-REQ-014 — Ordinary euro article price entry
+Status: IMPLEMENTED IN PR; MERGE PENDING.
+Implementation: PR #8 (open for review; not merged or deployed).
+  https://github.com/codeWithDEI/BasarKasse/pull/8
+Requirement: All tills SHALL use ordinary euro article input with comma or point
+as decimal separator and whole numbers as whole euros, without a mode setting.
+BK-REQ-001 (positive fifty-cent price steps) SHALL remain enforced on the server.
+Acceptance criteria:
+  - 2,50 and 2.50 mean EUR 2.50; 5 means EUR 5.00; 25 means EUR 25.00.
+  - The UI previews the interpreted amount, requests a decimal keyboard and
+    edits an existing basket item without changing its identity or value.
+  - Old tenths input 25 becomes 2,50 once; original unmarked euro text stays
+    unchanged. Invalid old text is retained for explicit re-entry.
+  - Basket/receipt cents, original operation IDs and pending payloads stay
+    unchanged. Storage-upgrade failure preserves the original record.
+  - A migrated original pending sale recovers both before server arrival and
+    after a lost committed reply. Obsolete clients cannot book new commands;
+    exact old outcomes remain recoverable without duplicate effects.
+Evidence: tests/event-workflow.test.mjs, tests/register.test.ts and
+  tests/browser/recovery.spec.ts; docs/testing/results-euro-entry-2026-11-19.md.
+
 Verification and traceability
 ----------------------------
 PR #5 passed 68 Node tests, 50 browser cases, both runtime builds and type
@@ -211,9 +233,10 @@ Merged-commit CI:
 Operator workflow: docs/operations/event-teams-and-settlement.md
 Release gates: docs/production-readiness.md
 
-Summary: BK-REQ-001..010 implemented in merged PR #5. BK-REQ-011 has software
+Summary: BK-REQ-001..010 were implemented in merged PR #5; BK-REQ-002 is
+superseded by BK-REQ-014, which awaits merge/deployment. BK-REQ-011 has software
 evidence but open physical acceptance. BK-REQ-012 remains an external acceptance
 task. Production bootstrap/removal of public demo access, central manager
 recovery and event sign-off remain separate release gates. This documentation
 does not turn protected evaluation into production approval. BK-REQ-013 is
-implemented in PR #7 and awaits review, merge and deployment.
+implemented by merged PR #7; protected evaluation deployment is recorded above.

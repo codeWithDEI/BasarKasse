@@ -71,19 +71,28 @@ till 1. Public demo access still prevents production approval.
 
 ## Article input and recovery
 
-Enter prices in tenths of euros: `5` = EUR 0.50, `25` = EUR 2.50, `65` = EUR 6.50.
-Only fifty-cent steps are accepted. Cash received, checkout rounding, floats,
-counts and cash movements still use ordinary euro input.
+Enter ordinary euro amounts: `2,50` or `2.50` = EUR 2.50, `5` = EUR 5.00 and
+`25` = EUR 25.00. The interpreted amount is shown under the field. The decimal
+keyboard is requested on tablets. Only positive fifty-cent steps up to EUR 10,000
+are accepted, independently validated by the server. Cash received, checkout
+rounding, floats, counts and cash movements keep the same ordinary euro input.
+There is no per-person, per-tablet or event input-format setting.
 
-Old browser v2 drafts gain a `priceUnit` marker and atomic input conversion: old
-`25` euros becomes new input `250`; cent-valued basket items, pending commands and
-receipts remain unchanged. Invalid/non-fifty-cent drafts remain invalid until
-corrected. A failed migration write blocks work. Known pre-upgrade pending commands
-get separate provenance metadata while retaining their original financial payload.
-Cached obsolete clients cannot submit new commands: the API requires the new entry
-protocol, while still allowing lookup/exact replay of already recorded outcomes.
-An unmarked pending command created after input migration is checked but not blindly
-sent. Preserve it for technical price/outcome review. Close old tabs before upgrading.
+Before deploying this change, finish purchases where possible and close all old
+application tabs. Back up and reopen the approved URL; do not delete website data.
+An old tenths draft `25` is converted once to `2,50`. Original unmarked euro drafts
+keep their text. Basket cents, pending command IDs/payloads and receipts are not
+scaled. Invalid old text is shown in a re-entry notice, with an empty price field;
+enter the price from the label again. A failed storage upgrade blocks work while
+preserving old evidence. No SQL migration is needed for this input-format change.
+
+Known migrated pending commands retain separate provenance and can resume the
+same cent-valued operation. Cached obsolete clients cannot submit new commands:
+the API requires `euros-v2`, while still allowing lookup/exact replay of already
+recorded outcomes. An unmarked/obsolete pending command created after migration
+is checked but not blindly sent without provenance. Preserve it for technical
+price/outcome review. Do not revert to a cached client after the storage upgrade;
+application rollback also requires a plan for upgraded browser drafts.
 
 Sleep/Wi-Fi recovery retains the original operation. If another scoped cashier is
 signed in, **Ursprüngliche Anmeldung laden** signs that session out and loads the

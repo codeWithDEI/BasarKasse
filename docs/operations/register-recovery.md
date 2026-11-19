@@ -82,7 +82,7 @@ available again; its stored draft/pending command is then restored.
 Use only a synthetic event, individual test accounts and a written expected ledger.
 For every device record model, OS, browser version, URL and result:
 
-- Enter seller 42 / price `65` (EUR 6.50), round to EUR 7.00, receive EUR 10.00. Lock/unlock
+- Enter seller 42 / price `6,50` (EUR 6.50), round to EUR 7.00, receive EUR 10.00. Lock/unlock
   before submission; restore the draft and verify partial entry fields.
 - Submit, immediately lock, unlock after 30 seconds; confirm one stored sale and
   EUR 3.00 change. Repeat with at least a five-minute lock.
@@ -112,8 +112,9 @@ See [event teams and settlement](event-teams-and-settlement.md). Personal links
 preselect name/event on an idle tablet. Cashiers cannot change event/till. If the
 wrong account is signed in, **Ursprüngliche Anmeldung laden** returns to the original
 login without clearing open work. Team edits revoke sessions; resolve reassigned
-scope with the manager before recovery. Old euro input drafts migrate to tenths;
-cent-valued baskets and commands retain their contents.
+scope with the manager before recovery. Old tenths input drafts migrate once to ordinary euros (`25` becomes `2,50`);
+original unmarked euro drafts keep their text. Invalid old text requires explicit
+re-entry. Cent-valued baskets, original command IDs and receipts remain unchanged.
 
 ## Upgrade and restore precautions
 

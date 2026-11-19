@@ -23,9 +23,9 @@ const event=async(name,tillCount=2)=>(await command('demo-fruehjahr','createEven
 const cashier=async(eventId,number,name='Synthetic cashier')=>{const id=crypto.randomUUID();await command(eventId,'addStaff',{operationId:id,name,role:'cashier',tillNumber:number,pin:'4826'});return person(id);};
 after(()=>{db.close();rmSync(tmp,{recursive:true,force:true});if(priorKey===undefined)delete process.env.BASAR_TEAM_PIN_KEY;else process.env.BASAR_TEAM_PIN_KEY=priorKey;});
 
-test('item input uses exact tenths of euros and only fifty-cent price steps; payout rounding is separate',()=>{
-  assert.equal(parseItemPrice('5'),50);assert.equal(parseItemPrice('25'),250);assert.equal(parseItemPrice('100000'),1000000);
-  for(const value of ['','0','1','7','2,50','25.0','-5','Infinity','100005'])assert.equal(parseItemPrice(value),null,value);
+test('item input uses ordinary euros and only fifty-cent price steps; payout rounding is separate',()=>{
+  for(const [input,cents] of [['0,50',50],['2,50',250],['2.50',250],['2,5',250],['5',500],['7',700],['25',2500],['10000',1000000]])assert.equal(parseItemPrice(input),cents,input);
+  for(const value of ['','0','0,29','2,25','2,501','-5','Infinity','10000,50','1.000,00'])assert.equal(parseItemPrice(value),null,value);
   for(let gross=50;gross<10000;gross+=50){const claim=sellerClaim(gross,1500,'pool');assert.equal(claim.net%10,0);assert.equal(claim.commission+claim.rounding+claim.net,gross);assert.ok(claim.rounding>=0&&claim.rounding<=9);}
   assert.deepEqual(sellerClaim(650,1500,'pool'),{commission:98,rounding:2,net:550});
   assert.deepEqual(sellerClaim(650,1500,'till'),{commission:98,rounding:0,net:552});
@@ -61,11 +61,19 @@ test('HTTP upgrade gate blocks unknown obsolete commands but preserves original 
  const send=body=>POST(new Request('https://example.test/api/basar',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json',Cookie:'basar_session='+token},body:JSON.stringify(body)}));
  const legacy={action:'sale',eventId:id,operationId:crypto.randomUUID(),tillId:till,items:[{id:crypto.randomUUID(),seller:1,price:650}],received:1000};
  try{
-  const blocked=await send(legacy);assert.equal(blocked.status,409);const upgrade=await blocked.json();assert.equal(upgrade.code,'CLIENT_UPGRADE_REQUIRED');assert.equal(upgrade.recorded,false);assert.match(upgrade.error,/neu laden/);
-  assert.equal(db.sqlite.prepare('SELECT id FROM operations WHERE id=?').get(legacy.operationId),undefined);
-  const accepted=await send({...legacy,entryFormat:'tenths-v1'});assert.equal(accepted.status,200);const receipt=await accepted.json();
-  const replay=await send(legacy);assert.equal(replay.status,200);assert.deepEqual(await replay.json(),receipt);
-  const checked=await send({action:'operationStatus',command:legacy});assert.deepEqual(await checked.json(),{state:'committed',result:receipt});
+  for(const entryFormat of [undefined,'tenths-v1']){
+   const blocked=await send({...legacy,entryFormat});assert.equal(blocked.status,409);const upgrade=await blocked.json();assert.equal(upgrade.code,'CLIENT_UPGRADE_REQUIRED');assert.equal(upgrade.recorded,false);assert.match(upgrade.error,/neu laden/);
+   assert.equal(db.sqlite.prepare('SELECT id FROM operations WHERE id=?').get(legacy.operationId),undefined);
+  }
+  const accepted=await send({...legacy,entryFormat:'euros-v2'});assert.equal(accepted.status,200);const receipt=await accepted.json();
+  for(const entryFormat of [undefined,'tenths-v1']){
+   const replay=await send({...legacy,entryFormat});assert.equal(replay.status,200);assert.deepEqual(await replay.json(),receipt);
+   const changed=await send({...legacy,entryFormat,items:[{...legacy.items[0],price:6500}]});assert.equal(changed.status,409);assert.equal((await changed.json()).code,'OPERATION_MISMATCH');
+  }
+  const checked=await send({action:'operationStatus',command:{...legacy,entryFormat:'tenths-v1'}});assert.deepEqual(await checked.json(),{state:'committed',result:receipt});
+  const invalid={...legacy,operationId:crypto.randomUUID(),items:[{...legacy.items[0],price:125}]};
+  const rejected=await send({...invalid,entryFormat:'euros-v2'});assert.equal(rejected.status,400);const rejection=await rejected.json();assert.equal(rejection.recorded,true);
+  const oldRejection=await send({...invalid,entryFormat:'tenths-v1'});assert.equal(oldRejection.status,400);assert.deepEqual(await oldRejection.json(),rejection);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM sales WHERE event_id=?').get(id).n,1);
  }finally{if(oldOrigin===undefined)delete process.env.BASAR_PUBLIC_ORIGIN;else process.env.BASAR_PUBLIC_ORIGIN=oldOrigin;}
 });

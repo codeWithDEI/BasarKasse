@@ -73,15 +73,22 @@ stateDiagram-v2
   Receipt --> Draft: Cashier explicitly starts next customer
 ```
 
-The v2 record also carries `priceUnit: 'tenths'`. Legacy euro input `25` becomes
-`250` atomically before adoption; cent-valued items, pending commands and receipts
-stay unchanged. A failed migration write blocks work. Old clients cannot safely
-interpret this new input record. Separate `validatedPendingId` provenance allows
-an original pre-upgrade cent command to resume unchanged. New HTTP commands carry
-`entryFormat: tenths-v1`. The API blocks unknown obsolete-client commands with an
-unrecorded `CLIENT_UPGRADE_REQUIRED`; stored outcomes remain available. A client
-checks an unmarked command's outcome but never blindly resubmits it when provenance
-is absent. This prevents cached euro-input code from scaling a migrated price.
+The v2 record carries `priceUnit: 'euros'`. On upgrade from the tenths release,
+unsubmitted input `25` becomes `2,50` in one storage replacement. Original unmarked
+v2 records already used euros, so their text is retained without scaling. Invalid
+non-digit tenths text is retained in `priceReview`, the input is left empty and the
+cashier must re-enter the label price. Numeric non-fifty-cent amounts remain invalid.
+Cent-valued items, original pending commands/IDs, cash fields and receipts stay
+unchanged. A failed migration write blocks work without overwriting the old record.
+
+Separate `validatedPendingId` provenance allows an original migrated tenths command
+(or a previously validated unmarked command) to resume its exact cent payload. An
+unmarked or obsolete command created after migration is checked for its stored
+outcome but is not blindly resubmitted without provenance. New HTTP commands carry
+`entryFormat: euros-v2`. The API blocks unknown obsolete-client commands with an
+unrecorded `CLIENT_UPGRADE_REQUIRED`; stored results/rejections remain available,
+including exact old-format replay. Cached tenths code rejects the new record unit.
+No historical sale, payout or financial fingerprint is converted.
 
 Adding/editing an item and clearing its input fields is also one write. If an
 intent cannot be stored, no request is sent. If storing a confirmed receipt fails,

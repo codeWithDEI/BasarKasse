@@ -4,8 +4,10 @@
 
 Persist amounts as integer euro cents and commission in basis points (`1500 = 15%`).
 New articles must cost positive multiples of 50 cents, at most EUR 10,000. Article
-input uses tenths of euros: `5` = EUR 0.50, `25` = EUR 2.50. Received cash, counts,
-floats and movements retain normal euro input. Validation also runs on the server.
+input uses ordinary euros: `2,50` or `2.50` = EUR 2.50, `5` = EUR 5.00 and
+`25` = EUR 25.00. This is one fixed format across all tills; there is no input-mode
+setting. Received cash, counts, floats and movements use the same euro convention.
+The positive fifty-cent increment and maximum are also enforced on the server.
 
 For each seller, sum active items before calculating:
 

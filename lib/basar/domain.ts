@@ -11,7 +11,7 @@ export type CashPool={balance:number;contributed:number;movements:number;paid:nu
 export type State={pool?:CashPool;instance?:{epoch:string;writesPaused:boolean};summary?:RegisterSummary;salesPage?:{before:number|null;nextBefore:number|null;limit:number;search:string};events:BasarEvent[];event:BasarEvent;tills:Till[];sales:Sale[];payouts:Payout[];movements:Movement[];audit:{id:string;action:string;detail:string;staff_name:string;created_at:string}[];staff:Person[];user:Person|null};
 export function money(cents:number){return new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100)}
 export function parseMoney(input:string){const s=input.trim().replace(/\s|€/g,'');if(!/^\d{1,7}([,.]\d{1,2})?$/.test(s))return null;const [a,b='']=s.replace(',','.').split('.');const n=Number(a)*100+Number(b.padEnd(2,'0'));return Number.isSafeInteger(n)?n:null}
-export function parseItemPrice(input:string){if(!/^\d{1,6}$/.test(input.trim()))return null;const cents=Number(input.trim())*10;return Number.isSafeInteger(cents)&&cents>=50&&cents<=1000000&&cents%50===0?cents:null}
+export function parseItemPrice(input:string){const cents=parseMoney(input);return cents!==null&&cents>=50&&cents<=1000000&&cents%50===0?cents:null}
 export function sellerClaim(gross:number,rate:number,mode?:string){const commission=fee(gross,rate),unrounded=gross-commission,rounding=mode==='pool'?unrounded%10:0;return {commission,rounding,net:unrounded-rounding}}
 export function saleTotal(sale:Pick<Sale,'total'|'donation'>){return sale.total+(sale.donation||0)}
 export function fee(gross:number,rate:number){return Math.floor((gross*rate+5000)/10000)}
