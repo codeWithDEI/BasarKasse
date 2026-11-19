@@ -28,13 +28,13 @@ const statuses = {}, latency = [], refreshLatency = [];
 let replays = 0;
 const request = async (action, payload={}, session=cookie) => {
   const start = performance.now();
-  const r = await fetch(endpoint, {method:'POST', headers:{Origin:origin,'Content-Type':'application/json', ...(session?{Cookie:session}:{})}, body:JSON.stringify({entryFormat:'tenths-v1',action,...payload}), signal:AbortSignal.timeout(30000)});
+  const r = await fetch(endpoint, {method:'POST', headers:{Origin:origin,'Content-Type':'application/json', ...(session?{Cookie:session}:{})}, body:JSON.stringify({entryFormat:'euros-v2',action,...payload}), signal:AbortSignal.timeout(30000)});
   const data = await r.json();
   return {r,data,ms:performance.now()-start};
 };
 const command = async (action, payload={}, session=cookie) => {
   const result = await request(action, {operationId:crypto.randomUUID(),eventId,...payload}, session);
-  assert.equal(result.r.status,200,JSON.stringify({entryFormat:'tenths-v1',action,status:result.r.status,data:result.data}));
+  assert.equal(result.r.status,200,JSON.stringify({entryFormat:'euros-v2',action,status:result.r.status,data:result.data}));
   return result.data;
 };
 const state = async session => {
@@ -102,7 +102,7 @@ try {
       assert.equal(result.r.status,200,JSON.stringify(result.data)); // No hidden retry conceals a conflict.
       const goods=5*(100+50*register);
       assert.equal(result.data.change,5000-goods-5);
-      receipts.push({payload,result:result.data});
+      receipts.push({payload,result:result.data,register});
       if(n%10===0) {
         // Deliberately ignore the first result at the client and replay its exact command.
         const replay=await request('sale',payload,sessions[register]);
@@ -127,8 +127,8 @@ try {
   const expectedTotal=seedCount*505+perRegister*6780;
   assert.equal(after.data.sales.reduce((sum,s)=>sum+s.total+s.donation,0),expectedTotal);
   // Replay a previously acknowledged command after a server restart.
-  const replay=await request('sale',receipts[0].payload,sessions[0]);
-  assert.equal(replay.r.status,200);assert.deepEqual(replay.data,receipts[0].result);replays++;
+  const replay=await request('sale',receipts[0].payload,sessions[receipts[0].register]);
+  assert.equal(replay.r.status,200,JSON.stringify(replay.data));assert.deepEqual(replay.data,receipts[0].result);replays++;
   await stopServer();
   db=openDatabase(database);
   assert.equal(db.sqlite.prepare('PRAGMA integrity_check').get().integrity_check,'ok');

@@ -1,2 +1,2 @@
-// A cached euro-input client must not reinterpret a migrated tenths-input draft.
-export const CLIENT_ENTRY_FORMAT='tenths-v1';
+// Cached tenths-input clients must not book new work after the euro-input upgrade.
+export const CLIENT_ENTRY_FORMAT='euros-v2';

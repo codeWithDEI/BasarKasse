@@ -5,7 +5,7 @@ import jsQR from 'jsqr';
 const basePath=JSON.parse(readFileSync('.next/required-server-files.json','utf8')).config.basePath;
 const key=registerKey(basePath),origin='http://127.0.0.1:3138',api=origin+basePath+'/api/basar';
 async function setup(context:BrowserContext,page:Page) {
- const post=async(action:string,p:Record<string,unknown>={})=>{const r=await context.request.post(api,{headers:{Origin:origin},data:{entryFormat:'tenths-v1',action,operationId:crypto.randomUUID(),...p}});expect(r.status()).toBe(200);return r.json();};
+ const post=async(action:string,p:Record<string,unknown>={})=>{const r=await context.request.post(api,{headers:{Origin:origin},data:{entryFormat:'euros-v2',action,operationId:crypto.randomUUID(),...p}});expect(r.status()).toBe(200);return r.json();};
  await post('demo',{staffId:'demo-leitung'});
  const {eventId}=await post('createEvent',{eventId:'demo-fruehjahr',name:'Browser recovery '+crypto.randomUUID(),date:'2026-11-21',commission:1500,sellerMin:1,sellerMax:150,tillCount:6});
  const {tillId}=await post('openTill',{eventId,number:1,opening:10000});
@@ -17,7 +17,7 @@ async function setup(context:BrowserContext,page:Page) {
 }
 async function basket(page:Page) {
  await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');
- await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('65');
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
  await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
  await page.getByRole('textbox',{name:'Aufrunden auf',exact:true}).fill('7');
  await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('10');
@@ -32,7 +32,7 @@ async function pending(page:Page) {
  await expect.poll(()=>page.evaluate(key=>!!JSON.parse(localStorage.getItem(key)!).pending,key)).toBe(true);
 }
 
-test('cashier sees its assigned event/till and own turnover while fifty-cent entry works without a comma',async({context,page})=>{
+test('cashier sees its assigned event/till and own turnover while ordinary euro entry retains fifty-cent steps',async({context,page})=>{
  const fixture=await setup(context,page);
  const other=(await fixture.post('openTill',{eventId:fixture.eventId,number:2,opening:5000})).tillId;
  await fixture.post('sale',{eventId:fixture.eventId,tillId:fixture.tillId,items:[{id:crypto.randomUUID(),seller:1,price:650}],received:1000});
@@ -46,13 +46,52 @@ test('cashier sees its assigned event/till and own turnover while fifty-cent ent
  expect((await context.request.get(api+'?view=register&event=demo-fruehjahr')).status()).toBe(403);
  await page.getByRole('button',{name:'Kasse',exact:true}).click();
  await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');
- await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('7');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
- await expect(page.getByText(/Bitte ohne Komma in 50-Cent-Schritten/)).toBeVisible();
- await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('25');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('2,25');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
+ await expect(page.getByText(/Bitte einen Eurobetrag in 50-Cent-Schritten/)).toBeVisible();
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('2,50');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();
  await expect(page.locator('.basket-row strong')).toHaveText(/2,50/);
  await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('5');await page.getByRole('button',{name:'Verkauf abschließen'}).click();
  await expect(page.getByText('VERKAUF #0003 GESPEICHERT')).toBeVisible();
  const own=await fixture.state();expect(own.sales).toHaveLength(2);expect(own.tills).toHaveLength(1);
+});
+
+test('ordinary euro prices accept comma, point and whole euros with an exact preview and stable item editing',async({context,page})=>{
+ const fixture=await setup(context,page),price=page.getByRole('textbox',{name:'Artikelpreis',exact:true});await expect(price).toHaveAttribute('inputmode','decimal');
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await price.fill('2,50');await expect(page.locator('.entry-fields .field').last().locator('small')).toContainText('2,50');
+ await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();const item=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).items[0],key);
+ await page.locator('.seller-number').click();await expect(price).toHaveValue('2,50');await price.fill('2.50');await page.getByRole('button',{name:'Änderung übernehmen'}).click();
+ expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).items[0],key)).toEqual(item);
+ for(const input of ['5','25']){await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await price.fill(input);await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();}
+ await expect(page.locator('.basket-total strong')).toContainText('32,50');await page.screenshot({path:test.info().outputPath('ordinary-euro-entry.png'),fullPage:true});
+ await page.getByRole('textbox',{name:'Erhaltenes Bargeld',exact:true}).fill('40');await page.getByRole('button',{name:'Verkauf abschließen'}).click();await expect(page.getByText('VERKAUF #0001 GESPEICHERT')).toBeVisible();await expect(page.locator('.change-box strong')).toContainText('7,50');
+ const state=await fixture.state();expect(state.sales).toHaveLength(1);expect(state.sales[0].items.map((i:{price:number})=>i.price)).toEqual([250,500,2500]);
+});
+
+test('an old tenths draft keeps basket cents and converts an unsubmitted 25 to 2,50 exactly once',async({context,page})=>{
+ await setup(context,page);await basket(page);
+ const original=await page.evaluate(key=>{const r=JSON.parse(localStorage.getItem(key)!);Object.assign(r,{priceUnit:'tenths',seller:'7',price:'25'});localStorage.setItem(key,JSON.stringify(r));return r;},key);
+ for(let reload=0;reload<2;reload++){
+  await page.reload();await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('2,50');await expect(page.locator('.entry-fields .field').last().locator('small')).toContainText('2,50');
+  const restored=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key);expect(restored.priceUnit).toBe('euros');for(const field of ['eventId','tillId','items','received','roundTo','seller'])expect(restored[field]).toEqual(original[field]);
+ }
+});
+
+test('invalid old tenths input requires fresh euro entry without losing its original text or basket',async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);
+ await page.evaluate(key=>{const r=JSON.parse(localStorage.getItem(key)!);Object.assign(r,{priceUnit:'tenths',seller:'7',price:'2,50'});localStorage.setItem(key,JSON.stringify(r));},key);await page.reload();
+ const warning=page.getByText(/bisherige Preiseingabe.*konnte nicht eindeutig übernommen/);await expect(warning).toBeVisible();await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('');
+ expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).priceReview,key)).toBe('2,50');await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();await expect(page.getByText(/Bitte einen Eurobetrag in 50-Cent-Schritten/)).toBeVisible();await expect(page.locator('.basket-row')).toHaveCount(1);
+ await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('2,50');await expect(warning).toHaveCount(0);await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();await expect(page.locator('.basket-row')).toHaveCount(2);expect((await fixture.state()).sales).toHaveLength(0);
+});
+
+for(const committed of [false,true])test(`an old tenths pending sale ${committed?'with a lost committed reply':'not yet received by the server'} retains its ID and cent amounts after upgrade`,async({context,page})=>{
+ const fixture=await setup(context,page);await basket(page);const record=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),key),state=await fixture.state();
+ const original={entryFormat:'tenths-v1',instanceEpoch:state.instance.epoch,action:'sale',operationId:crypto.randomUUID(),eventId:fixture.eventId,staffId:'demo-leitung',tillId:fixture.tillId,items:record.items,received:1000,donation:50};
+ if(committed)await fixture.post('sale',{...original,entryFormat:'euros-v2'});
+ await page.evaluate(({key,original})=>{const r=JSON.parse(localStorage.getItem(key)!);Object.assign(r,{priceUnit:'tenths',pending:original});delete r.validatedPendingId;localStorage.setItem(key,JSON.stringify(r));},{key,original});
+ const sent:Record<string,unknown>[]=[];page.on('request',request=>{if(request.method()==='POST'&&request.postDataJSON()?.action==='sale')sent.push(request.postDataJSON());});
+ await page.reload();await receipt(page);expect((await fixture.state()).sales).toHaveLength(1);
+ if(committed)expect(sent).toHaveLength(0);else {expect(sent.length).toBeGreaterThan(0);for(const body of sent)expect(body).toEqual({...original,entryFormat:'euros-v2'});}
 });
 
 test('a personal event login link preselects the cashier and needs only its PIN on an idle tablet',async({context,page})=>{
@@ -249,7 +288,7 @@ test('if the pending intent cannot be saved locally, no sale request is transmit
 
 test('interruption immediately after adding an item cannot restore that item in both basket and entry fields',async({context,page})=>{
  await setup(context,page);
- await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('65');
+ await page.getByRole('textbox',{name:'Verkäufernummer',exact:true}).fill('42');await page.getByRole('textbox',{name:'Artikelpreis',exact:true}).fill('6,50');
  await page.evaluate(key=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){const before=k===key?JSON.parse(this.getItem(k)!):null;original.call(this,k,v);if(k===key&&!before.items.length&&JSON.parse(v).items.length===1)throw new DOMException('Interrupted after write','QuotaExceededError');};},key);
  await page.getByRole('button',{name:'Zum Einkauf hinzufügen'}).click();await expect(page.getByText(/Kassenstand konnte nicht sicher gespeichert/)).toBeVisible();
  await page.reload();await expect(page.locator('.basket-row')).toHaveCount(1);await expect(page.getByRole('textbox',{name:'Verkäufernummer',exact:true})).toHaveValue('');await expect(page.getByRole('textbox',{name:'Artikelpreis',exact:true})).toHaveValue('');

@@ -15,7 +15,8 @@ See the [production readiness gates](docs/production-readiness.md) and
 - Twelve-hour sessions survive tablet sleep; remembered staff need only their PIN
   to log back in. Pending work always requires its original person.
 - Manual baskets, cash received, change and optional donations through rounding up.
-- Fifty-cent article prices without comma (`5` = EUR 0.50, `25` = EUR 2.50).
+- Ordinary euro article input (`2,50` or `2.50` = EUR 2.50; `5` = EUR 5.00),
+  with fifty-cent price steps and an explicit amount preview.
 - Integer-cent accounting; separate commission, tips and ten-cent payout rounding.
 - Full-sale voids, counted till closure into a cash pool, movements and seller payouts.
 - Editable event teams, manager PIN display, personal login links/QR codes and session revocation.
