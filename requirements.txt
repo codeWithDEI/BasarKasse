@@ -200,7 +200,8 @@ Actual camera scanning remains part of BK-REQ-011 field acceptance.
 
 BK-REQ-014 — Ordinary euro article price entry
 Status: IMPLEMENTED IN PR; MERGE PENDING.
-Implementation: this change (PR reference will be added when opened).
+Implementation: PR #8 (open for review; not merged or deployed).
+  https://github.com/codeWithDEI/BasarKasse/pull/8
 Requirement: All tills SHALL use ordinary euro article input with comma or point
 as decimal separator and whole numbers as whole euros, without a mode setting.
 BK-REQ-001 (positive fifty-cent price steps) SHALL remain enforced on the server.

@@ -1,5 +1,8 @@
 # Ordinary euro article input — 19 November 2026
 
+Implementation: [PR #8](https://github.com/codeWithDEI/BasarKasse/pull/8),
+requirement BK-REQ-014 (supersedes BK-REQ-002). Merge/deployment pending.
+
 Scope: replace tenths-of-euro shortcuts with one ordinary euro input format for
 all tills. No format setting, schema migration or repricing of historical data.
 Protected evaluation status and production acceptance gates remain unchanged.
