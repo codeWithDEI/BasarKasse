@@ -199,8 +199,8 @@ login and draft preservation; both builds and explicit typecheck passed.
 Actual camera scanning remains part of BK-REQ-011 field acceptance.
 
 BK-REQ-014 — Ordinary euro article price entry
-Status: IMPLEMENTED IN PR; MERGE PENDING.
-Implementation: PR #8 (open for review; not merged or deployed).
+Status: IMPLEMENTED; MERGED AND DEPLOYED TO PROTECTED EVALUATION.
+Implementation: PR #8 (merged; deployed 19 November 2026, b48f057).
   https://github.com/codeWithDEI/BasarKasse/pull/8
 Requirement: All tills SHALL use ordinary euro article input with comma or point
 as decimal separator and whole numbers as whole euros, without a mode setting.
@@ -234,9 +234,34 @@ Operator workflow: docs/operations/event-teams-and-settlement.md
 Release gates: docs/production-readiness.md
 
 Summary: BK-REQ-001..010 were implemented in merged PR #5; BK-REQ-002 is
-superseded by BK-REQ-014, which awaits merge/deployment. BK-REQ-011 has software
+superseded by BK-REQ-014, deployed to protected evaluation. BK-REQ-011 has software
 evidence but open physical acceptance. BK-REQ-012 remains an external acceptance
-task. Production bootstrap/removal of public demo access, central manager
-recovery and event sign-off remain separate release gates. This documentation
+task. Production provisioning/device access and central manager recovery are
+covered by BK-REQ-015; event sign-off remains a separate release gate. This documentation
 does not turn protected evaluation into production approval. BK-REQ-013 is
 implemented by merged PR #7; protected evaluation deployment is recorded above.
+
+
+BK-REQ-015 — Prepare a separate empty production installation
+Status: IMPLEMENTED IN PR; REVIEW AND PUBLIC ACTIVATION PENDING.
+Implementation: production preparation PR (link added after creation).
+Requirement: The system SHALL prepare a new empty production bazaar independently
+of evaluation, with six tills, no demo accounts/login, private initial access and
+an explicit owner-approved activation step. On a paired cashier tablet, normal
+re-entry SHALL require only the original person's PIN and preserve pending work.
+Acceptance criteria:
+  - A new volume, key, installation ID and browser namespace prevent adoption
+    or overwriting of evaluation data/drafts. Prepared financial writes are blocked.
+  - One-use device QR links admit only the intended event/till; consumed links
+    cannot enroll another browser. A lost reply can safely retry the same nonce.
+  - Cashier PINs have 6–8 digits; managers have strong passwords, never displayed.
+    Device/session/account revocation is enforced at financial commit.
+  - Offline manager recovery preserves actor/ledger identity. A restore revokes
+    devices/sessions, changes epoch and requires reconciliation before release.
+  - Separate verified server/Mac backups and a candidate-only proxy route exist
+    before Go. A launch failure preserves financial data and pauses writes.
+  - Real tablets, venue Internet, cash ownership/fallback, configuration, capacity
+    and loss-window acceptance remain explicitly recorded external launch gates.
+Evidence: tests/production.test.mjs, tests/production-browser/access.spec.ts,
+  tests/test_production_cutover.py; docs/architecture/production-access.md and
+  docs/operations/production-launch.md. Preparation is not permission to go live.

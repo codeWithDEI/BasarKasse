@@ -1,4 +1,5 @@
 import {database} from './database';
+import {installation} from './installation';
 import {sellerClaim,type State,type Person,type BasarEvent,type Sale,type Till,type Payout,type RegisterSummary} from './domain';
 import {ApiError} from './operations';
 import {visibleContext} from './access';
@@ -19,11 +20,13 @@ const balances=(rows:Record<string,any>[])=>Object.fromEntries(rows.map(row=>[ro
 export async function instanceStatus() {
   const state=await database().prepare('SELECT epoch,writes_paused FROM instance_state WHERE id=1').first<{epoch:string;writes_paused:number}>();
   if(!state)throw new ApiError('Die Datenbankfreigabe fehlt. Bitte die technische Leitung hinzuziehen.',503,'WRITE_PAUSED');
-  return {epoch:state.epoch,writesPaused:!!state.writes_paused};
+  const installed=await installation(),productionPrepared=installed.mode==='production'&&installed.phase==='prepared';
+  return {epoch:state.epoch,writesPaused:!!state.writes_paused||productionPrepared,...(productionPrepared?{productionPrepared:true}:{})};
 }
-export async function assertWriteEpoch(command:Record<string,any>) {
+export async function assertWriteEpoch(command:Record<string,any>,action=command.action) {
   const state=await instanceStatus();
-  if(state.writesPaused)throw new ApiError('Buchungen sind nach einer Wiederherstellung gesperrt. Bitte die Kassenleitung hinzuziehen.',503,'WRITE_PAUSED');
+  if(state.productionPrepared&&!['createEvent','updateEvent','addStaff','updateStaff'].includes(action))throw new ApiError('Der Produktivbasar ist vorbereitet. Buchungen werden erst nach der Freigabe aktiviert.',503,'PRODUCTION_NOT_ACTIVE');
+  if(state.writesPaused&&!state.productionPrepared)throw new ApiError('Buchungen sind nach einer Wiederherstellung gesperrt. Bitte die Kassenleitung hinzuziehen.',503,'WRITE_PAUSED');
   // Pre-upgrade commands are accepted only on the original, never-restored database.
   if((command.instanceEpoch??'initial')!==state.epoch)throw new ApiError('Dieser Tablet-Vorgang stammt aus einem älteren Datenbankstand. Nicht erneut erfassen. Bitte mit der Kassenleitung abgleichen.',409,'RESTORE_REVIEW_REQUIRED');
 }

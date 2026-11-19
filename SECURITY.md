@@ -1,57 +1,58 @@
-# Security and evaluation boundaries
+# Security and installation boundaries
 
-This release is for protected evaluation with synthetic data. Default manager
-and cashier accounts and the demo-login API remain enabled. Changing a displayed
-PIN or hiding demo buttons would not remove those server-side capabilities.
-There is no supported production provisioning mode yet. Event PIN editing does
-not make the public demo manager private.
+The default deployment remains protected evaluation, with public demo credentials
+behind proxy access control. The explicit production profile provisions a separate
+empty database and fails closed if `BASAR_MODE` and the installation marker differ.
+Production never seeds demo accounts and denies the demo-login endpoint.
+Implementation/preparation does not approve real-money event operation.
+
+See [production access](docs/architecture/production-access.md) for device scope,
+versioned password hashing, twelve-hour sessions, one-use enrollment, revocation
+and offline manager recovery, and [launch gates](docs/production-readiness.md).
 
 ## Current controls
 
-- Server-side manager checks for privileged commands; PIN hashes use salted
-  PBKDF2-SHA256, and sessions expire 12 hours after login, with no shorter idle
-  timeout. Tablet locking and Wi-Fi loss do not log out a valid session. The
-  browser remembers a staff ID for PIN re-entry; this is not an authentication
-  credential. Pending commands require their original actor.
-- HttpOnly, SameSite=Strict session cookie; Secure when the configured public
-  origin is HTTPS. Cookie path follows the build-time application base path.
-- POST requires JSON and the expected Origin. Set `BASAR_PUBLIC_ORIGIN` behind
-  a reverse proxy; forwarded headers are not blindly trusted.
-- Login attempts are limited by account, not by a client-supplied IP header.
-- Financial mutations use atomic batches and operation records. These provide
-  consistency controls, not protection from an administrator editing SQLite.
+- Production requires a trusted device plus personal authentication. An unpaired
+  browser obtains only installation/device metadata. Register devices can log in
+  only cashiers assigned to their event/till. Evaluation login names/metadata
+  remain visible behind the evaluation proxy boundary.
+- Production credentials use salted PBKDF2-SHA256 with 600,000 iterations:
+  six-to-eight-digit cashier PINs and 15–128-character manager passwords.
+  Evaluation retains legacy verifiers. Account attempt limits are enforced.
+- Secure (on HTTPS), HttpOnly, SameSite=Strict, path-scoped session/device cookies.
+  Sessions expire after twelve hours without an extra idle timeout. Tablet lock
+  and WLAN loss do not revoke valid sessions. PINs/passwords are never stored in
+  browser draft records. Temporary enrollment secrets are removed after confirmation.
+- POST requires JSON and the expected Origin. Set `BASAR_PUBLIC_ORIGIN`; arbitrary
+  forwarded headers are not trusted. Financial requests have bounded item/body sizes.
+- Cashier queries, exports and commands are event/till scoped. Team changes revoke
+  sessions and authorization versions. Device/account guards also run at commit.
+- Cashier PIN display is an explicit authorized manager response. AES-256-GCM
+  ciphertext is bound to staff/event IDs with a separate stable key. Manager
+  passwords are never recoverable/displayed. Back up the key separately and never
+  export a decrypted PIN list.
+- Atomic financial/audit/outcome writes and immutable command IDs support replay
+  recovery. They do not protect against a server administrator editing SQLite.
+  Restores revoke devices/sessions, change epoch and pause writes for reconciliation.
 
-## Outstanding controls before live use
+## Dependencies and remaining boundaries
 
-Production bootstrap, removal of demo access and locked-out central manager
-recovery remain open. Event team editing, PIN reset/disable and session revocation
-are implemented. Cashier SQL reads/exports and commands are bound to their event/till;
-they do not receive other tills' sales/turnover or manager payout/pool/audit data.
-Unauthenticated protected snapshots expose selected event metadata and login names.
+The 19 November 2026 `pnpm audit --prod --json` still reports 11 advisories:
+0 critical, 4 high, 4 moderate and 3 low. No dependency versions were changed in
+this production-preparation change. The [dated review](docs/testing/dependency-review-2026-11-19.md)
+records affected paths and reachability limits; these findings are not reported
+as fixed. The image still includes development dependencies. Dependency cleanup
+and a smaller image remain priority maintenance work requiring their own builds
+and regression checks.
 
-PIN display is an explicit manager team response. Recoverable PINs use AES-256-GCM
-with `BASAR_TEAM_PIN_KEY` outside SQLite; login retains salted PBKDF2 verifiers.
-PINs are excluded from normal snapshots, pending storage, fingerprints and logs.
-Protect and separately back up the key; do not export decrypted PIN lists. Team
-changes revoke sessions and increment authorization version. Financial commit and
-session-issuance guards close reassignment/PIN-reset races. See
-[team operations](docs/operations/event-teams-and-settlement.md).
-Legacy unresolved staff commands require private technical review during upgrade.
-Financial commands now retain their ID through unknown outcomes and session expiry;
-actual device/storage and venue acceptance remain required. See
-[transactions](docs/architecture/transactions.md).
+Keep HTTPS, private tablet/host access, restricted backups and separately preserved
+keys. File permissions/SSH transfer are implemented; at-rest encryption, retention
+ownership, recovery loss-window acceptance and supported security disclosure
+contact remain operator responsibilities. A valid device cookie is a bearer
+credential, not hardware attestation. Same-origin malicious code, stolen cookies,
+host/disk/power loss and venue Internet failures remain outside these guarantees.
+Never log authorization headers, cookies, PINs or complete request bodies.
 
-Review dependencies for each release. The 2026-11-08 review after the demo fixes
-found 11 production audit advisories (0 critical, 4 high, 4 moderate, 3 low).
-This is a historical snapshot, not a statement that all reachable vulnerabilities
-are resolved. Re-run `pnpm audit --prod --json` and assess the reachable paths.
-The image currently includes development dependencies and should be reduced
-before establishing a supported production release process.
-
-Keep HTTPS, proxy access control, private backups, least-privilege runtime users
-and restricted server access. Never log authentication headers, session cookies,
-PINs or complete request bodies. Agree retention/access rules with the organizer.
-
-Report a suspected vulnerability privately to the repository owner. Do not put
-credentials or personal event data in a public issue. The maintainers still need
-to establish a supported disclosure contact and response process.
+Report suspected vulnerabilities privately to the repository owner; do not put
+credentials or personal records in public issues. The maintainers still need to
+establish a supported disclosure contact and response process.

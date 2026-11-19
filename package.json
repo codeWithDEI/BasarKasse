@@ -14,11 +14,12 @@
     "db:generate": "drizzle-kit generate",
     "build:selfhost": "next build --webpack",
     "start:selfhost": "node selfhost/start.mjs",
-    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts tests/register.test.ts && node --experimental-strip-types --test tests/service.test.mjs tests/event-workflow.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs && node --test tests/api-recovery.test.mjs tests/operations.test.mjs",
+    "test": "node --experimental-strip-types --test tests/domain.test.ts tests/http.test.ts tests/register.test.ts && node --experimental-strip-types --test tests/service.test.mjs tests/event-workflow.test.mjs && node --experimental-strip-types --test tests/concurrency.test.mjs && node --test tests/api-recovery.test.mjs tests/operations.test.mjs && node --experimental-strip-types --test tests/production.test.mjs",
     "test:load": "node scripts/test-register-load.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test:recovery": "playwright test",
-    "test:soak": "node scripts/test-register-soak.mjs"
+    "test:soak": "node scripts/test-register-soak.mjs",
+    "test:production": "playwright test --config playwright.production.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

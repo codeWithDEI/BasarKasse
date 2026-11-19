@@ -3,11 +3,13 @@
 This runbook currently supports protected evaluation. Resolve the
 [production gates](../production-readiness.md) before real cash use.
 Use a reviewed exact revision and separate data/access for each environment.
+For the explicit production profile, use the [production launch runbook](production-launch.md).
 
 ## Configuration
 
 | Variable | Purpose |
 | --- | --- |
+| `BASAR_MODE` | `evaluation` (default) or `production`; must match the database installation marker |
 | `BASAR_TEAM_PIN_KEY` | Stable secret: 64 hex characters for AES-GCM manager PIN display; separately backed up |
 | `BASAR_DATABASE` | Writable local SQLite file; default `data/basarkasse.sqlite` |
 | `BASAR_PUBLIC_ORIGIN` | Public HTTP(S) origin only, e.g. `https://cash.example.org`; no path |

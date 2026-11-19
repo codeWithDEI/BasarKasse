@@ -1,0 +1,12 @@
+# Candidate only. Install inside the existing HTTPS site after the explicit go.
+# Keep this outside the active *.caddy glob until the approved cutover.
+@basarkasse_production path /basarkasse /basarkasse/*
+handle @basarkasse_production {
+ header {
+  Cache-Control "no-store"
+  Referrer-Policy "same-origin"
+  X-Content-Type-Options "nosniff"
+  Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+ }
+ reverse_proxy basarkasse-production:3000
+}

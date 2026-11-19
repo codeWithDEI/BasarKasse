@@ -4,6 +4,8 @@ import {assertEventAccess,personColumns} from './access';
 import type {Person} from './domain';
 import type {BasarEvent} from './domain';
 import {hashPin} from './auth';
+import {productionMode} from './installation';
+import {productionVerifier,validProductionCredential} from './credentials.ts';
 
 export type TeamMember=Person&{disabled:number;pin?:string|null};
 const hex=(value:Uint8Array)=>Array.from(value,byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -30,6 +32,7 @@ export async function readTeam(eventId:string,user:Person,revealPins=false) {
   return Promise.all(rows.map(async row=>{
     const {pin_cipher,...member}=row;
     if(!revealPins)return member;
+    if(productionMode()&&row.role==='manager')return {...member,pin:null};
     let pin:string|null=null;
     if(pin_cipher&&row.event_id){try{pin=await decryptPin(pin_cipher,row.id,row.event_id);}catch{pin=null;}}
     else if(row.id==='demo-kasse')pin='1234';
@@ -55,10 +58,15 @@ export async function prepareTeamChange(action:string,p:Record<string,any>,user:
   const duplicate=await database().prepare('SELECT id FROM staff WHERE event_id=? AND lower(name)=lower(?) AND disabled=0 AND id<>?').bind(event.id,name,id).first();
   if(duplicate&&!disabled)throw new ApiError('Dieser Name ist in diesem Basar bereits vergeben.');
   let pinHash=previous?.pin_hash,pinCipher=previous?.pin_cipher;
+  if(productionMode()&&previous&&previous.role!==p.role&&!p.pin)throw new ApiError('Beim Rollenwechsel müssen neue Zugangsdaten vergeben werden.');
   if(!previous||p.pin){
-    if(typeof p.pin!=='string'||!/^\d{4,8}$/.test(p.pin))throw new ApiError('Der PIN muss 4 bis 8 Ziffern haben.');
-    pinCipher=await encryptPin(p.pin,id,event.id);
-    const salt=crypto.randomUUID();pinHash=salt+':'+await hashPin(p.pin,salt);
+    if(productionMode()){
+      if(!validProductionCredential(p.role,p.pin))throw new ApiError(p.role==='manager'?'Das Passwort muss 15 bis 128 Zeichen haben.':'Der PIN muss 6 bis 8 Ziffern haben.');
+      pinHash=await productionVerifier(p.pin);pinCipher=p.role==='manager'?null:await encryptPin(p.pin,id,event.id);
+    }else {
+      if(typeof p.pin!=='string'||!/^\d{4,8}$/.test(p.pin))throw new ApiError('Der PIN muss 4 bis 8 Ziffern haben.');
+      pinCipher=await encryptPin(p.pin,id,event.id);const salt=crypto.randomUUID();pinHash=salt+':'+await hashPin(p.pin,salt);
+    }
   }
   const commands=action==='addStaff'?[{sql:'INSERT INTO staff(id,name,role,pin_hash,disabled,event_id,till_number,pin_cipher) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)',params:[id,name,p.role,pinHash,disabled,event.id,tillNumber,pinCipher,event.id,operationId]}]:[
     {sql:'UPDATE staff SET name=?,role=?,pin_hash=?,disabled=?,event_id=?,till_number=?,pin_cipher=?,auth_version=auth_version+1 WHERE id=? AND EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)',params:[name,p.role,pinHash,disabled,event.id,tillNumber,pinCipher,id,event.id,operationId]},

@@ -1,6 +1,6 @@
 # Architecture overview
 
-Status: description of the evaluation implementation, with proposed improvements
+Status: description of the default evaluation and explicit production profiles, with proposed improvements
 explicitly identified. Read [production readiness](../production-readiness.md)
 before treating any component as approved for live cash handling.
 
@@ -44,6 +44,10 @@ API via mutable `globalThis.__basarDB`. The SQLite adapter implements that subse
 There is no explicit injected repository interface yet. The UI and service are
 large modules with loosely typed command payloads; the architecture is not yet
 modular enough for independent teams to change financial workflows casually.
+
+Production adds an installation identity/phase, device enrollment and device-bound
+sessions. See [production access](production-access.md). The public evaluation
+route stays in place until a separately approved launch.
 
 ## Data flow
 

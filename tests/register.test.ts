@@ -98,3 +98,8 @@ test('obsolete or unmarked commands need original migration provenance before re
  assert.equal(canResubmitPending({...record,pending:oldTenths,validatedPendingId:command.operationId}),true);
  const migrated=loadRegister({...s,getItem:(k:string)=>k===key?JSON.stringify({...record,priceUnit:'tenths'}):s.getItem(k)},key);assert.equal(canResubmitPending(migrated),false);
 });
+
+test('a new production installation never adopts or overwrites evaluation drafts or legacy storage',()=>{
+ const s=storage(),evaluation={...emptyRegister(),eventId:command.eventId,items:command.items,pending:command};saveRegister(s,key,evaluation);s.setItem('basar-pending-v1',JSON.stringify(command));const before=new Map(s.values),productionKey=key+':production:isolated-installation';
+ const production=loadRegister(s,productionKey,false);assert.deepEqual(production,emptyRegister());for(const [name,value] of before)assert.equal(s.getItem(name),value);assert.equal(loadRegister(s,key).pending?.operationId,command.operationId);
+});

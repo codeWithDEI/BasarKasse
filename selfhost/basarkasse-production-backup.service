@@ -1,0 +1,8 @@
+[Unit]
+Description=BasarKasse production consistent verified backup
+Requires=docker.service
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/basarkasse-production-backup
+Nice=10

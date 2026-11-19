@@ -1,6 +1,7 @@
 import {database} from './database';
 import type {Person,BasarEvent} from './domain';
 import {ApiError} from './operations';
+import {currentDeviceForPerson} from './devices';
 
 export const personColumns='id,name,role,event_id,till_number,auth_version';
 export function assertEventAccess(user:Person,eventId:string) {
@@ -12,9 +13,10 @@ export function assertTillAccess(user:Person,number:number) {
   if(user.role==='cashier'&&user.till_number!==number)throw new ApiError('Diese Anmeldung gehört zu einer anderen Kasse.',403,'SCOPE_MISMATCH');
 }
 export async function currentPerson(user:Person) {
+  await currentDeviceForPerson(user);
   const current=await database().prepare('SELECT '+personColumns+' FROM staff WHERE id=? AND disabled=0').bind(user.id).first<Person>();
   if(!current||(current.auth_version??0)!==(user.auth_version??0))throw new ApiError('Die Anmeldung wurde geändert. Bitte erneut anmelden.',401,'AUTH_REQUIRED');
-  return current;
+  return {...current,...(user.device_id?{device_id:user.device_id}:{})};
 }
 export async function visibleContext(eventId:string|undefined,user:Person|null) {
   if(user?.event_id){if(eventId&&eventId!==user.event_id)throw new ApiError('Diese Anmeldung gehört zu einem anderen Basar.',403,'SCOPE_MISMATCH');eventId=user.event_id;}

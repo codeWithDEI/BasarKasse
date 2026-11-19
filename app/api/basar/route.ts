@@ -1,3 +1,5 @@
+import {accessState,requireDevice,claimDevice} from '@/lib/basar/devices';
+import {productionMode} from '@/lib/basar/installation';
 import {CLIENT_ENTRY_FORMAT} from '@/lib/basar/client-version';
 import {readTeam} from '@/lib/basar/team';
 import {recordApiResult} from '@/lib/basar/health';
@@ -12,16 +14,18 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
 export async function GET(request: Request) {
   try {
     await bootstrap();
-    const user = await auth(request);
     const query=new URL(request.url).searchParams;
+    if(query.get('view')==='access')return json(await accessState(request));
+    const device=await requireDevice(request);const user = await auth(request);
+    if(productionMode()&&!user&&device?.event_id){if(query.get('event')&&query.get('event')!==device.event_id)throw new ApiError('Dieses Tablet gehört zu einem anderen Basar.',403,'SCOPE_MISMATCH');query.set('event',device.event_id);}
     if(query.get('view')==='team'){if(!user)throw new ApiError('Bitte als Kassenleitung anmelden.',401,'AUTH_REQUIRED');if(!query.get('event'))throw new ApiError('Bitte einen Basar wählen.');return json({team:await readTeam(query.get('event')!,user,query.get('revealPins')==='1')});}
     if(query.get('view')==='register'){
       const before=query.has('before')?Number(query.get('before')):undefined;
       if(before!==undefined&&(!Number.isSafeInteger(before)||before<1))throw new ApiError('Ungültige Verkaufsseite.');
       const search=query.get('search')||'';if(search.length>80)throw new ApiError('Der Suchtext ist zu lang.');
-      return json(await readRegisterState(query.get('event')||undefined,user,{before,search}));
+      const state=await readRegisterState(query.get('event')||undefined,user,{before,search});if(productionMode()&&!user&&device?.kind==='register')state.staff=state.staff.filter(p=>p.role==='cashier'&&p.till_number===device.till_number);return json(state);
     }
-    return json(await readState(query.get('event') || undefined, user));
+    const state=await readState(query.get('event') || undefined,user);if(productionMode()&&!user&&device?.kind==='register')state.staff=state.staff.filter(p=>p.role==='cashier'&&p.till_number===device.till_number);return json(state);
   } catch (error) {
     return json({error: error instanceof ApiError ? error.message : 'Die Daten konnten nicht geladen werden. Bitte die Verbindung prüfen.',...(error instanceof ApiError?{code:error.code}:{})}, error instanceof ApiError ? error.status : 503);
   }
@@ -37,10 +41,12 @@ async function handlePost(request: Request) {
     try {body=JSON.parse(bodyText);} catch {return json({error:'Ungültige Anfrage.',code:'INVALID_REQUEST'},400);}
     if(!body || typeof body!=='object' || typeof body.action!=='string') return json({error:'Ungültige Anfrage.',code:'INVALID_REQUEST'},400);
     await bootstrap();
+    if(body.action==='claimDevice'){const claimed=await claimDevice(request,body.code,body.nonce);return json({ok:true,eventId:claimed.eventId},200,{'Set-Cookie':claimed.cookie});}
+    if(body.action==='demo'&&productionMode())throw new ApiError('Übungszugänge sind im Produktivbetrieb abgeschaltet.',403,'DEMO_DISABLED');
     if(body.action==='login'||body.action==='demo') {
       if(body.action==='demo'&&!['demo-leitung','demo-kasse'].includes(body.staffId)) throw new ApiError('Ungültige Übungsrolle.');
       const token=await login(body.staffId,body.action==='demo'?'1234':body.pin,request);
-      const headers=new Headers(request.headers);headers.set('cookie','basar_session='+token);const person=await auth(new Request(request.url,{headers}));
+      const headers=new Headers(request.headers),cookies=(request.headers.get('cookie')||'').split(';').map(v=>v.trim()).filter(v=>v&&!v.startsWith('basar_session='));cookies.push('basar_session='+token);headers.set('cookie',cookies.join('; '));const person=await auth(new Request(request.url,{headers}));
       return json({ok:true,eventId:person?.event_id??undefined,tillNumber:person?.till_number??undefined},200,{'Set-Cookie':sessionCookie(request,token)});
     }
     if(body.action==='logout') {

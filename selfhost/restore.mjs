@@ -7,14 +7,14 @@ import {migrateDatabase} from './migrations.mjs';
 export async function restoreDatabase(source,destination) {
   const original=inspectDatabase(source);await backupDatabase(source,destination);
   const db=openDatabase(destination),epoch=crypto.randomUUID();
-  try{migrateDatabase(db);db.sqlite.exec('BEGIN IMMEDIATE');try{db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run(epoch);db.sqlite.exec('DELETE FROM sessions; DELETE FROM login_limits; COMMIT');}catch(error){db.sqlite.exec('ROLLBACK');throw error;}db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');}finally{db.close();}
+  try{migrateDatabase(db);db.sqlite.exec('BEGIN IMMEDIATE');try{db.sqlite.prepare('UPDATE instance_state SET epoch=?,writes_paused=1 WHERE id=1').run(epoch);db.sqlite.exec('DELETE FROM sessions; DELETE FROM login_limits;');db.sqlite.prepare('UPDATE trusted_devices SET revoked_at=COALESCE(revoked_at,?)').run(Date.now());db.sqlite.exec('COMMIT');}catch(error){db.sqlite.exec('ROLLBACK');throw error;}db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');}finally{db.close();}
   const restored=inspectDatabase(destination);
   if(JSON.stringify(original.counts)!==JSON.stringify(restored.counts)||JSON.stringify(original.ledger)!==JSON.stringify(restored.ledger)||JSON.stringify(original.pool??{})!==JSON.stringify(restored.pool??{}))throw new Error('Restored financial evidence differs from the backup. Keep all tills blocked.');
   return {epoch,writesPaused:true,report:restored};
 }
 export function releaseRestoredDatabase(path,epoch) {
   const db=openDatabase(path);
-  try{if(db.sqlite.prepare('UPDATE instance_state SET writes_paused=0 WHERE id=1 AND epoch=? AND writes_paused=1').run(epoch).changes!==1)throw new Error('Restored instance or reconciliation acknowledgement does not match.');}finally{db.close();}
+  try{if(db.sqlite.prepare("SELECT 1 FROM installation WHERE mode='production' AND phase='prepared'").get())throw new Error('Prepared production requires explicit activation, not restore release.');if(db.sqlite.prepare('UPDATE instance_state SET writes_paused=0 WHERE id=1 AND epoch=? AND writes_paused=1').run(epoch).changes!==1)throw new Error('Restored instance or reconciliation acknowledgement does not match.');}finally{db.close();}
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url) {
   if(process.argv[2]==='release') {

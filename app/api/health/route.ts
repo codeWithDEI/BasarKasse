@@ -1,4 +1,4 @@
-import {bootstrap,auth} from '@/lib/basar/service';
+import {bootstrap,auth,ApiError} from '@/lib/basar/service';
 import '@/lib/basar/health';
 export const dynamic='force-dynamic';
 export async function GET(request:Request) {
@@ -9,5 +9,5 @@ export async function GET(request:Request) {
     if(user.role!=='manager')return Response.json({error:'Die Statusseite ist der Kassenleitung vorbehalten.'},{status:403,headers});
     if(!globalThis.__basarHealth)return Response.json({error:'Die Betriebsüberwachung ist für diese Umgebung nicht eingerichtet.'},{status:503,headers});
     return Response.json(await globalThis.__basarHealth(),{headers});
-  }catch{return Response.json({error:'Die Statusprüfung konnte nicht abgeschlossen werden.'},{status:503,headers});}
+  }catch(error){if(error instanceof ApiError)return Response.json({error:error.message,code:error.code},{status:error.status,headers});return Response.json({error:'Die Statusprüfung konnte nicht abgeschlossen werden.'},{status:503,headers});}
 }

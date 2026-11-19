@@ -4,8 +4,9 @@ A web cash register for community consignment bazaars. Cashiers enter seller
 numbers and prices; managers reconcile tills and pay sellers after sales end.
 The interface is German. Project documentation and contribution guidance are English.
 
-**Status: protected evaluation / training only. Do not use this release to handle
-real event money.** Six tills are a design goal, not an approved operating capacity.
+**Status: protected evaluation remains the deployed public service. A separate
+production profile can be prepared; real-money use still requires event sign-off.**
+Six tills have synthetic test evidence, with venue/device acceptance still open.
 See the [production readiness gates](docs/production-readiness.md) and
 [measured test results](docs/testing/results-event-workflow-2026-11-10.md) before planning a live event.
 
@@ -30,8 +31,11 @@ See the [production readiness gates](docs/production-readiness.md) and
   wake/reconnect reconciles the original operation. **This is not offline checkout.**
 
 There is no physical article inventory, partial refund workflow, payment terminal,
-TSE integration or fiscal export. Default training accounts and
-training login remain enabled. Do not mistake a newly created event for a production mode.
+TSE integration or fiscal export. The default evaluation profile enables training accounts and demo login. The
+explicit production profile disables them and requires trusted-device enrollment.
+Creating an event in evaluation does not switch the installation to production.
+See [production access](docs/architecture/production-access.md) and the
+[prepared launch workflow](docs/operations/production-launch.md).
 
 ## Quick start: local evaluation
 

@@ -54,3 +54,5 @@ yarn-error.log*
 # Independent Python ledger checker
 __pycache__/
 *.py[cod]
+
+/test-results-production/
