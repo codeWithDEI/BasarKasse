@@ -1,11 +1,12 @@
-# Production readiness: six cash registers
+# Production readiness: event-specific cash registers
 
 **Decision today: evaluation only; no approval for real money.** The current
 transaction model has useful safeguards, but recovery, contention and operational
 acceptance remain incomplete. A working demo and green unit tests do not close
 these gates. Assign an owner and attach evidence for every row before approval.
 
-Target event: **21 November 2026**. [Register recovery](operations/register-recovery.md)
+Target event: **Spielzeugbasar, 21 November 2026, two tills**. The later baby
+bazaar is the six-till target and needs its own venue/device acceptance. [Register recovery](operations/register-recovery.md)
 is the current priority; no automatic live approval follows from its implementation.
 
 ## Priority 0 — required before a live bazaar
@@ -18,7 +19,7 @@ is the current priority; no automatic live approval follows from its implementat
 | PR-04: database invariants | Unique event receipt numbers and open till numbers; consistent operation scope; stable actors and validated migrations | Concurrent open/sale/payout/close/void tests; old-data upgrade and rollback/restore drill | Implemented unique receipt/open-till constraints and indexes; migration refuses conflicting history; restore fencing tested |
 | PR-05: production access | Explicit production bootstrap, no demo accounts/login; staff lifecycle, PIN change, revoke sessions, manager recovery; define cashier data access | New production database has no default credentials; permission and recovery tests pass | Scope, event teams, PIN reset/display and session revocation implemented; separate production bootstrap, disabled demo access, scoped device enrollment and offline manager recovery implemented; event acceptance and reviewed deployment remain open |
 | PR-06: recoverable operations | Automated consistent off-host backups, retention/encryption/access policy, monitoring and tested spare-host recovery | Restore a backup onto a separate instance, replay/reconcile receipts and measure recovery time/loss window | Scheduled verified Ubuntu/Mac copies, health dashboard, actual off-host restore/epoch drill and isolated Ubuntu restore passed; loss-window, encryption and spare-host sign-off open |
-| PR-07: six-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Venue WLAN and Android/iOS mix reported; actual Internet/physical-device/prolonged acceptance open |
+| PR-07: event-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Venue WLAN and Android/iOS mix reported; actual Internet/physical-device/prolonged acceptance open |
 | PR-08: ownership and cash process | Named technical lead/deputy, event manager, cash reconciliation, incident fallback and confirmed organizer requirements | Organizer signs readiness checklist; no critical unresolved risk | Open |
 
 Fixing these gates should be small reviewed changes with regression evidence;
@@ -30,7 +31,9 @@ before the event. A new database alone does not close PR-01 or PR-07.
 These are **targets**, not measured guarantees. Replace them with the organizer's
 actual forecast and record the final values in the release checklist.
 
-- Six real registers; test twelve simulated clients as a capacity margin.
+- Two real registers for the 21 November toy bazaar; six for a future baby
+  bazaar. Test twelve simulated clients as a capacity margin; rehearsals must
+  cover the actual devices for the event being approved.
 - At least 5,000 historical sales / 25,000 items, or twice the expected full-day
   data volume, whichever is larger. Include realistic voids, payouts and movements.
 - Four-hour rehearsal at twice the forecast sustained checkout rate. Include

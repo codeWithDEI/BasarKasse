@@ -83,3 +83,15 @@ opening cash, real team assignment, technical/cash owners and fallback, dependen
 risk decision, encryption/retention and backup loss-window policy still need
 explicit acceptance. A prepared container and passing synthetic tests do not
 close these gates. No real-money launch was authorized by this preparation.
+
+
+## Event configuration correction
+
+The owner clarified after PR #9 that the 21 November event is a **toy bazaar with
+two tills**. Six tills belong to a later baby bazaar. The six/twelve-client results
+above remain workload evidence; they are not a requirement to run six tills on
+Saturday. The prepared event is being corrected through setup-only commands, with
+unneeded provisional cashier accounts disabled and their unused device grants
+revoked. A distinct event-manager account/device grant provides notebook support
+and health access without opening or consuming a till. Public activation remains
+separately gated; financial tables must remain empty.

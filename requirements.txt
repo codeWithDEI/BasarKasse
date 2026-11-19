@@ -247,7 +247,8 @@ Status: IMPLEMENTED IN PR; REVIEW AND PUBLIC ACTIVATION PENDING.
 Implementation: PR #9 (review pending; public activation not authorized).
   https://github.com/codeWithDEI/BasarKasse/pull/9
 Requirement: The system SHALL prepare a new empty production bazaar independently
-of evaluation, with six tills, no demo accounts/login, private initial access and
+of evaluation, with the event-specific till count, no demo accounts/login, private
+initial access and
 an explicit owner-approved activation step. On a paired cashier tablet, normal
 re-entry SHALL require only the original person's PIN and preserve pending work.
 Acceptance criteria:
@@ -266,3 +267,10 @@ Acceptance criteria:
 Evidence: tests/production.test.mjs, tests/production-browser/access.spec.ts,
   tests/test_production_cutover.py; docs/architecture/production-access.md and
   docs/operations/production-launch.md. Preparation is not permission to go live.
+
+
+Event clarification (19 November 2026): the 21 November Spielzeugbasar SHALL use
+two tills. Six tills apply to a later Babybasar. A distinct notebook support
+account SHALL have event-manager/health access without consuming a till number;
+this role includes management changes and is not read-only. Prepare a private
+management-device invitation and separate strong password for that account.

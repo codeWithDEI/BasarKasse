@@ -31,9 +31,11 @@ A private candidate route must remain outside the active `*.caddy` import glob.
 key files mode 0600 in private directories and back up the production key separately
 on the Mac. Confirm existing volumes/paths before any Docker operation.
 
-Proposed event defaults are 21 November 2026, six tills, 15% commission and seller
+The 21 November 2026 toy bazaar uses **two tills**. Six tills are the future baby
+bazaar target, with separate event-specific acceptance. Other proposed defaults are
+15% commission and seller
 numbers 1–150. These are preparation values, not organizer acceptance. Accounts
-initially have the distinct names `Kasse 1` through `Kasse 6`; assign real people
+initially have the distinct names `Kasse 1` and `Kasse 2`; assign real people
 and confirm cash responsibilities before opening. Do not use the actual prepared
 production database for rehearsal sales.
 
@@ -51,7 +53,7 @@ node --experimental-strip-types selfhost/production.mjs inspect \
   --database /data/basarkasse.sqlite
 ```
 
-Expected: phase `prepared`, writes paused, one event, six cashiers, seven device
+Expected: phase `prepared`, writes paused, one event, two cashiers, three initial device
 invitations, zero demo users and zero sales/tills/payouts/movements/pool entries.
 There is one nonfinancial setup audit entry. Do not seed a float or open tills.
 Generate private printable QR cards using the same release:
@@ -65,6 +67,33 @@ cards, take real credential screenshots or put them in the repository. Read the
 manager password privately from the handover. Cashier PINs are visible only in
 authorized team management; never export a decrypted list. Unclaimed invitations
 expire after 72 hours; if launch moves, issue new ones and revoke obsolete grants.
+
+## Notebook support access
+
+A support notebook uses a **management device grant** and a separate event-scoped
+manager account. It does not open a till or consume one of the event's two till
+numbers. The intended user account is `Daniel · Unterstützung`, with a separate
+strong password. This is full event-management access, including potential
+financial changes, rather than a read-only observer role. Health status also
+requires a manager session. The two cashier devices remain scoped to their tills.
+
+Issue the notebook invitation using `production.mjs invite-device` with
+`kind:management`, a descriptive notebook label and the event ID. Keep its output
+and password in a separate private handover, not in the ordinary cashier cards.
+The prepared installation has four active invitations: two tills, event leadership
+and support notebook. Additional management browsers can be authorized separately;
+they do not increase `till_count`. Each browser profile needs its own grant.
+
+After the explicit Go, open the private notebook setup link in the intended
+browser, confirm device enrollment, select the support account and enter its
+password. Then use `/basarkasse` for the event and `/basarkasse/health` for
+operational status. A regular current desktop browser and Internet are required;
+normal support viewing does not need an SSH login. Remote support depends on the
+notebook's connectivity and the venue's connectivity for new cashier updates.
+
+Changing `production.example.json` changes a provisioning input template, not the
+already built application. Existing installations use their database event
+settings; no runtime image rebuild is needed for this two-till correction.
 
 ## Backups and preparation verification
 
