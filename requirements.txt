@@ -244,7 +244,8 @@ implemented by merged PR #7; protected evaluation deployment is recorded above.
 
 BK-REQ-015 — Prepare a separate empty production installation
 Status: IMPLEMENTED IN PR; REVIEW AND PUBLIC ACTIVATION PENDING.
-Implementation: production preparation PR (link added after creation).
+Implementation: PR #9 (review pending; public activation not authorized).
+  https://github.com/codeWithDEI/BasarKasse/pull/9
 Requirement: The system SHALL prepare a new empty production bazaar independently
 of evaluation, with six tills, no demo accounts/login, private initial access and
 an explicit owner-approved activation step. On a paired cashier tablet, normal

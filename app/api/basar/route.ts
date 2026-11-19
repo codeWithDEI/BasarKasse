@@ -1,5 +1,5 @@
 import {accessState,requireDevice,claimDevice} from '@/lib/basar/devices';
-import {productionMode} from '@/lib/basar/installation';
+import {productionMode,installation} from '@/lib/basar/installation';
 import {CLIENT_ENTRY_FORMAT} from '@/lib/basar/client-version';
 import {readTeam} from '@/lib/basar/team';
 import {recordApiResult} from '@/lib/basar/health';
@@ -55,6 +55,7 @@ async function handlePost(request: Request) {
     }
     const user=await auth(request);
     if(!user) throw new ApiError('Bitte erneut mit derselben Person anmelden. Der offene Vorgang bleibt erhalten.',401,'AUTH_REQUIRED');
+    if(productionMode()&&request.headers.get('X-Basar-Installation')!==(await installation()).installation_id)throw new ApiError('Die Produktivkasse wurde neu bereitgestellt. Bitte diese Seite neu laden. Der bisherige Einkauf bleibt erhalten.',409,'CLIENT_UPGRADE_REQUIRED');
     if(body.action==='operationStatus') {
       if(!body.command || typeof body.command.action!=='string') throw new ApiError('Die Buchungsdaten fehlen.');
       await assertWriteEpoch(body.command);

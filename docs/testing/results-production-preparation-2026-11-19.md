@@ -6,7 +6,7 @@ Go. This report is evidence for software behavior, not event acceptance.
 
 ## Local results
 
-- 85 Node tests passed (including 13 production provisioning/access/revocation/
+- 86 Node tests passed (including 14 production provisioning/access/revocation/
   restore tests and the evaluation-draft isolation regression).
 - Five Python deployment tests passed: candidate-only validation, invalid/stale Go,
   changed route/nonempty DB/stale backup refusal, ordered success and failure
@@ -24,7 +24,7 @@ Go. This report is evidence for software behavior, not event acceptance.
   sessions, 720 sales after 100 seed receipts, independent tills/payouts/pool,
   restart replay and restored-device/epoch fencing passed. Ten-second duration
   is smoke evidence only, not sustained capacity acceptance.
-- Self-host build and TypeScript passed. Hosted build is also required after the
+- Self-host build and TypeScript passed. Hosted build also passed after the
   final UI/status wording change; CI records the final exact-head checks.
 - Production dependency audit: 11 unresolved advisories (0 critical, 4 high,
   4 moderate, 3 low); see [reachability review](dependency-review-2026-11-19.md).

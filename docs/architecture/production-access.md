@@ -22,7 +22,11 @@ fresh-activation path to bypass restore reconciliation.
 
 The browser storage key includes the production installation ID. Evaluation
 baskets and legacy records are retained under their existing keys and never
-adopted into a fresh production event. Database restores preserve the installation
+adopted into a fresh production event. Production commands additionally require
+an `X-Basar-Installation` header matching the installation ID. Old cached
+evaluation tabs cannot send new production writes even after another tab sets
+current device/session cookies. This is a compatibility fence, not a secret or
+an authentication replacement. Database restores preserve the installation
 ID but change the epoch, so old pending commands remain available for reconciliation
 and are fenced from automatic submission.
 

@@ -101,7 +101,7 @@ function Basarkasse({installation,recheckAccess}:{installation:InstallationAcces
    const controller=new AbortController();requestController.current=controller;
    const timeout=setTimeout(()=>controller.abort(),20000);
    const post=async(body:unknown)=>{
-     const response=await fetch(basarPath('/api/basar'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body as Record<string,unknown>,entryFormat:CLIENT_ENTRY_FORMAT}),signal:controller.signal});
+     const response=await fetch(basarPath('/api/basar'),{method:'POST',headers:{'Content-Type':'application/json',...(production?{'X-Basar-Installation':installation.installationId}:{})},body:JSON.stringify({...body as Record<string,unknown>,entryFormat:CLIENT_ENTRY_FORMAT}),signal:controller.signal});
      const raw=await response.json();if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Das Buchungsergebnis konnte nicht gelesen werden. Bitte den Status erneut prüfen.');const data=raw as Record<string,any>;
      if(response.status===403&&data.code==='DEVICE_REQUIRED')recheckAccess();
      if(response.status===401){stateRef.current={...stateRef.current!,user:null};setState(stateRef.current);}
@@ -157,7 +157,7 @@ function Basarkasse({installation,recheckAccess}:{installation:InstallationAcces
    if(action==='addStaff'||action==='updateStaff') {
      // PINs must never be written to browser storage.
      running.current=true;setBusy(true);
-     try{const r=await fetch(basarPath('/api/basar'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),signal:AbortSignal.timeout(12000)});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error);await refresh();return d;}
+     try{const r=await fetch(basarPath('/api/basar'),{method:'POST',headers:{'Content-Type':'application/json',...(production?{'X-Basar-Installation':installation.installationId}:{})},body:JSON.stringify(p),signal:AbortSignal.timeout(12000)});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error);await refresh();return d;}
      finally{running.current=false;setBusy(false);}
    }
    if(!updateRegister(value=>({...value,pending:p,validatedPendingId:undefined})))throw new Error('Der Vorgang konnte auf dem Tablet nicht gesichert werden. Es wurde keine Anfrage gesendet.');
