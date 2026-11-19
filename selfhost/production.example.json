@@ -2,11 +2,11 @@
   "publicUrl": "https://roetgesportal.de/basarkasse",
   "managerName": "Kassenleitung",
   "event": {
-    "name": "Basar 21. November 2026",
+    "name": "Spielzeugbasar · 21. November 2026",
     "date": "2026-11-21",
     "commission": 1500,
     "sellerMin": 1,
     "sellerMax": 150,
-    "tillCount": 6
+    "tillCount": 2
   }
 }
