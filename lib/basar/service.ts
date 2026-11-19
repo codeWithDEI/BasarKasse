@@ -16,7 +16,7 @@ function requireManager(user:Person){if(user.role!=='manager')throw new ApiError
 function int(value:unknown,min:number,max:number,label:string){if(!Number.isSafeInteger(value)||Number(value)<min||Number(value)>max)throw new ApiError(label);return Number(value)}
 function text(value:unknown,min:number,max:number,label:string){if(typeof value!=='string'||value.trim().length<min||value.trim().length>max)throw new ApiError(label);return value.trim()}
 export async function mutate(action:string,p:any,user:Person){
- await assertWriteEpoch(p);
+ await assertWriteEpoch(p,action);
  user=await currentPerson(user);
  assertEventAccess(user,p.eventId);
  const op=text(p.operationId,8,100,'Die Vorgangskennung fehlt.');
@@ -35,15 +35,17 @@ export async function mutate(action:string,p:any,user:Person){
      const max=int(p.sellerMax,min,99999,'Ungültige letzte Verkäufernummer.');
      const count=int(p.tillCount,1,20,'Es sind 1 bis 20 Kassen möglich.');
      const result={eventId:id};
-     await db().batch([
-       db().prepare('INSERT INTO events(id,name,date,commission,seller_min,seller_max,till_count,status,version,created_at,settlement_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id,name,p.date,commission,min,max,count,'open',0,now(),'pool'),
-       db().prepare('INSERT INTO audit(id,event_id,action,detail,staff_name,created_at) VALUES(?,?,?,?,?,?)').bind(uuid(),id,'Veranstaltung angelegt',name,user.name,now()),
-       db().prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at,request_hash) VALUES(?,?,?,?,?,?,?)').bind(op,p.eventId,user.id,action,JSON.stringify(result),now(),hash),
+     const created=await db().batch([
+       db().prepare('INSERT INTO events(id,name,date,commission,seller_min,seller_max,till_count,status,version,created_at,settlement_mode) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM staff WHERE id=? AND auth_version=? AND disabled=0) AND (? IS NULL OR EXISTS(SELECT 1 FROM trusted_devices WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL AND expires_at>?))').bind(id,name,p.date,commission,min,max,count,'open',0,now(),'pool',user.id,user.auth_version??0,user.device_id??null,user.device_id??null,Date.now()),
+       db().prepare('INSERT INTO audit(id,event_id,action,detail,staff_name,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=?)').bind(uuid(),id,'Veranstaltung angelegt',name,user.name,now(),id),
+       db().prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at,request_hash) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=?)').bind(op,p.eventId,user.id,action,JSON.stringify(result),now(),hash,id),
      ]);
+     if(created[0].meta.changes!==1)throw new ApiError('Die Anmeldung oder Gerätefreigabe wurde geändert.',401,'AUTH_REQUIRED');
      return result;
    } catch(error) {
      const done=unwrapOperation(await operationStatus(action,p,user));if(done)return done;
      if(!(error instanceof ApiError))throw error;
+     await currentPerson(user);
      const failure={error:error.message,status:error.status,code:error.code};
      try {
        await db().prepare("INSERT INTO operations(id,event_id,staff_id,action,result,created_at,request_hash,outcome) VALUES(?,?,?,?,?,?,?,'rejected')").bind(op,p.eventId,user.id,action,JSON.stringify(failure),now(),hash).run();
@@ -100,7 +102,7 @@ export async function mutate(action:string,p:any,user:Person){
  }else throw new ApiError('Unbekannte Aktion.');
  }catch(error){if(!(error instanceof ApiError)||error.status>=500)throw error;rejection=error;commands.length=0;result={error:error.message,status:error.status,code:error.code};}
 
- const st=[db().prepare('UPDATE events SET version=version+1,last_op=? WHERE id=? AND version=? AND EXISTS(SELECT 1 FROM staff WHERE id=? AND auth_version=? AND disabled=0)').bind(op,e.id,e.version,user.id,user.auth_version??0),...commands.map(c=>db().prepare(c.sql).bind(...c.params)),...(!rejection?[db().prepare('INSERT INTO audit(id,event_id,action,detail,staff_name,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)').bind(uuid(),e.id,auditAction,detail,user.name,time,e.id,op)]:[]),db().prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at,request_hash,outcome) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)').bind(op,e.id,user.id,action,JSON.stringify(result),time,hash,rejection?'rejected':'committed',e.id,op)];try{const r=await db().batch(st);if(r[0].meta.changes){if(rejection)throw new ApiError(rejection.message,rejection.status,rejection.code,true);return result}}catch(error){const done=unwrapOperation(await operationStatus(action,p,user));if(done)return done;throw error}
+ const st=[db().prepare('UPDATE events SET version=version+1,last_op=? WHERE id=? AND version=? AND EXISTS(SELECT 1 FROM staff WHERE id=? AND auth_version=? AND disabled=0) AND (? IS NULL OR EXISTS(SELECT 1 FROM trusted_devices WHERE id=? AND revoked_at IS NULL AND token_hash IS NOT NULL AND expires_at>?))').bind(op,e.id,e.version,user.id,user.auth_version??0,user.device_id??null,user.device_id??null,Date.now()),...commands.map(c=>db().prepare(c.sql).bind(...c.params)),...(!rejection?[db().prepare('INSERT INTO audit(id,event_id,action,detail,staff_name,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)').bind(uuid(),e.id,auditAction,detail,user.name,time,e.id,op)]:[]),db().prepare('INSERT INTO operations(id,event_id,staff_id,action,result,created_at,request_hash,outcome) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND last_op=?)').bind(op,e.id,user.id,action,JSON.stringify(result),time,hash,rejection?'rejected':'committed',e.id,op)];try{const r=await db().batch(st);if(r[0].meta.changes){if(rejection)throw new ApiError(rejection.message,rejection.status,rejection.code,true);return result}}catch(error){const done=unwrapOperation(await operationStatus(action,p,user));if(done)return done;throw error}
  await new Promise(resolve=>setTimeout(resolve,Math.min(80,5*(attempt+1))+Math.floor(Math.random()*10)));
  }throw new ApiError('Eine andere Kasse hat gleichzeitig gebucht. Bitte erneut versuchen.',409,'CONCURRENT_WRITE')
 }

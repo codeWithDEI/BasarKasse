@@ -20,7 +20,7 @@ function validate(record:RegisterRecord) {
   if(record.lastSale && record.items.length) throw new Error('Gespeicherter Beleg und Warenkorb widersprechen sich. Bitte die Kassenleitung hinzuziehen.');
   return record;
 }
-export function loadRegister(storage:StoragePort,key:string):RegisterRecord {
+export function loadRegister(storage:StoragePort,key:string,adoptLegacy=true):RegisterRecord {
   const raw=storage.getItem(key);
   if(raw!==null){
     const record={lastStaffId:'',...JSON.parse(raw)};
@@ -38,6 +38,7 @@ export function loadRegister(storage:StoragePort,key:string):RegisterRecord {
     }
     return validate(record);
   }
+  if(!adoptLegacy){const record=emptyRegister();storage.setItem(key,JSON.stringify(record));return record;}
   const device=JSON.parse(storage.getItem('basar-device-v1')||'{}');
   const draft=JSON.parse(storage.getItem('basar-draft-v1')||'null');
   const pending=JSON.parse(storage.getItem('basar-pending-v1')||'null');

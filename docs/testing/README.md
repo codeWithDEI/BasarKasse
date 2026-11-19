@@ -178,3 +178,16 @@ pool/independent-ledger run. Its macOS figures are not intended-server acceptanc
 
 See [ordinary euro input results](results-euro-entry-2026-11-19.md) for the
 subsequent price-format change and upgrade/recovery checks.
+
+
+## Production-profile checks
+
+After the self-host build, `pnpm run test:production` runs ten Chromium/WebKit
+cases on fresh private synthetic installations. It covers unpaired access,
+single-use/lost-reply enrollment, PIN-only re-entry, reload/wake, committed reply
+loss, replacement-device pending recovery and manager password/PIN privacy.
+`python3 -m unittest discover -s tests -p 'test_*.py'` checks cutover preconditions,
+no-change preparation, ordered activation and failure without database rollback.
+`SOAK_MODE=production pnpm run test:soak` adds production device/session handling
+and restored-device revocation to the independent ledger/restore workload.
+No harness accepts an existing production database or external target URL.

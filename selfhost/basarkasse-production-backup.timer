@@ -1,0 +1,9 @@
+[Unit]
+Description=Verify a BasarKasse production backup every five minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=basarkasse-production-backup.service
+[Install]
+WantedBy=timers.target

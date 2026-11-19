@@ -1,0 +1,24 @@
+{
+  "verifiedAt": "2026-11-19T21:15:13.470Z",
+  "source": "verified Mac off-host snapshot",
+  "sourceSha256": "38141127cebe492c73b92f4215154d0763e7288c9446ac71e83b4fb6ed871b95",
+  "integrity": "ok",
+  "counts": {
+    "events": 1,
+    "sales": 0,
+    "till_sessions": 0,
+    "payouts": 0,
+    "movements": 0,
+    "operations": 0,
+    "audit": 1,
+    "pool_entries": 0
+  },
+  "newEpoch": true,
+  "writesPaused": true,
+  "devicesRevoked": true,
+  "sessionsRevoked": true,
+  "separatePinKeyVerified": true,
+  "financialRows": 0,
+  "realSecretsExported": false,
+  "installationMatches": true
+}

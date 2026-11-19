@@ -2,7 +2,8 @@
 
 Start with the [README](README.md), [architecture](docs/architecture/overview.md)
 and [production readiness list](docs/production-readiness.md). This repository
-currently delivers a training application. Keep that status visible in changes.
+defaults to protected evaluation. Production preparation does not grant event
+approval; keep the active mode and pending acceptance visible in changes.
 
 ## Development setup
 
@@ -42,6 +43,7 @@ For changes affecting bookings, roles, migrations, shared configuration or depen
 
 ```sh
 pnpm test
+python3 -m unittest discover -s tests -p 'test_*.py'
 pnpm run typecheck
 pnpm run build:selfhost
 pnpm run build
@@ -52,6 +54,8 @@ after the self-hosted build and attach the workload, runtime and results.
 For UI recovery changes, run `pnpm exec playwright install chromium webkit` then
 `pnpm run test:recovery` after the self-hosted build, and exercise real devices and interruption scenarios from
 [the testing guide](docs/testing/README.md). API tests alone are insufficient.
+For production access changes, also run `pnpm run test:production`. The guarded
+Ubuntu launch helper requires Python 3 (standard library only).
 Documentation-only changes need link/command review; re-running expensive builds
 is unnecessary if no executable files or configuration changed.
 

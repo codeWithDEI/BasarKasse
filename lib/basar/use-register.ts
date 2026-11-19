@@ -3,13 +3,13 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {basePath} from './paths';
 import {emptyRegister,loadRegister,saveRegister,registerKey,type RegisterRecord} from './register';
 
-export function useRegister() {
+export function useRegister(installationId?:string) {
   const [record,setRecord]=useState<RegisterRecord>(emptyRegister);
   const current=useRef(record);
   const owned=useRef(false);
   const [ready,setReady]=useState(false);
   const [storageError,setStorageError]=useState('Kassenspeicher wird geprüft …');
-  const key=registerKey(basePath);
+  const key=registerKey(basePath)+(installationId?':production:'+installationId:'');
   useEffect(()=>{
     const controller=new AbortController();let release=()=>{};let active=true;
     if(!navigator.locks || typeof AbortSignal.timeout!=='function') {setStorageError('Dieser Browser unterstützt die sichere Kassensperre nicht. Bitte einen aktuellen Browser und HTTPS verwenden.');return;}
@@ -17,7 +17,7 @@ export function useRegister() {
     navigator.locks.request(key,{signal:controller.signal},async()=>{
       if(!active)return;
       try {
-        let loaded=loadRegister(localStorage,key);
+        let loaded=loadRegister(localStorage,key,!installationId);
         const link=new URLSearchParams(window.location.search),event=link.get('event'),staff=link.get('staff');
         // An explicit login link may configure an idle tablet, never move a draft or pending command.
         if(event&&event.length<=100&&!loaded.pending&&!loaded.items.length&&!loaded.seller&&!loaded.price){
