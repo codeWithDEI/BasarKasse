@@ -51,6 +51,15 @@ class CutoverTests(unittest.TestCase):
         self.assertTrue(any('validate' in c for c in self.calls))
         self.assertFalse(any('reload' in c or '-i' in c for c in self.calls))
 
+    def test_public_https_probe_runs_on_host_and_keeps_backend_isolated(self):
+        m.verify_public_installation('https://example.org/basarkasse', 'synthetic-id')
+        call = self.calls[-1]
+        self.assertEqual(call[:2], ('python3', '-c'))
+        self.assertIn('urllib.request.urlopen', call[2])
+        self.assertIn('timeout=15', call[2])
+        self.assertEqual(call[-2:], ('https://example.org/basarkasse', 'synthetic-id'))
+        self.assertFalse(any(c[:2] == ('docker', 'network') for c in self.calls))
+
     def test_missing_go_expired_go_wrong_installation_and_open_gate_are_refused(self):
         for changes in ({'approved': False}, {'approvedAt': '2020-01-01T00:00:00Z'}, {'installationId': 'other'}, {'acceptance': {}}):
             with self.assertRaises(ValueError):

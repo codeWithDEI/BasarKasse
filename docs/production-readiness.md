@@ -1,9 +1,11 @@
 # Production readiness: event-specific cash registers
 
-**Decision today: evaluation only; no approval for real money.** The current
-transaction model has useful safeguards, but recovery, contention and operational
-acceptance remain incomplete. A working demo and green unit tests do not close
-these gates. Assign an owner and attach evidence for every row before approval.
+**Current release decision: owner-authorized production launch for the two-till
+Spielzeugbasar on 21 November 2026.** The owner gave explicit Go and reported
+successful venue Internet and tablet recovery checks. Technical publication on
+19 November is recorded in the [launch report](testing/results-production-launch-2026-11-19.md).
+This decision does not approve the future six-till Babybasar or claim a completed
+four-hour rehearsal. Keep the limitations and event-specific acceptance below visible.
 
 Target event: **Spielzeugbasar, 21 November 2026, two tills**. The later baby
 bazaar is the six-till target and needs its own venue/device acceptance. [Register recovery](operations/register-recovery.md)
@@ -19,7 +21,7 @@ is the current priority; no automatic live approval follows from its implementat
 | PR-04: database invariants | Unique event receipt numbers and open till numbers; consistent operation scope; stable actors and validated migrations | Concurrent open/sale/payout/close/void tests; old-data upgrade and rollback/restore drill | Implemented unique receipt/open-till constraints and indexes; migration refuses conflicting history; restore fencing tested |
 | PR-05: production access | Explicit production bootstrap, no demo accounts/login; staff lifecycle, PIN change, revoke sessions, manager recovery; define cashier data access | New production database has no default credentials; permission and recovery tests pass | Scope, event teams, PIN reset/display and session revocation implemented; separate production bootstrap, disabled demo access, scoped device enrollment and offline manager recovery implemented; event acceptance and reviewed deployment remain open |
 | PR-06: recoverable operations | Automated consistent off-host backups, retention/encryption/access policy, monitoring and tested spare-host recovery | Restore a backup onto a separate instance, replay/reconcile receipts and measure recovery time/loss window | Scheduled verified Ubuntu/Mac copies, health dashboard, actual off-host restore/epoch drill and isolated Ubuntu restore passed; loss-window, encryption and spare-host sign-off open |
-| PR-07: event-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Venue WLAN and Android/iOS mix reported; actual Internet/physical-device/prolonged acceptance open |
+| PR-07: event-device acceptance | Actual tablets, Wi-Fi, HTTPS proxy, intended server quotas, realistic event history and prolonged traffic | Signed rehearsal report including interruptions, reconciliation and operator training | Owner reports venue Internet and both toy-bazaar tablets/recovery passed; prolonged and future six-device acceptance remain open |
 | PR-08: ownership and cash process | Named technical lead/deputy, event manager, cash reconciliation, incident fallback and confirmed organizer requirements | Organizer signs readiness checklist; no critical unresolved risk | Open |
 
 Fixing these gates should be small reviewed changes with regression evidence;

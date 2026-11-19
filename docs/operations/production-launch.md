@@ -171,7 +171,10 @@ HTTP traffic, not real tablets, Wi-Fi, HTTPS rendering or power loss.
 
 The script rechecks the plan, preserves the previous private route and snapshot,
 activates only that prepared installation, atomically replaces only the imported
-BasarKasse route and reloads Caddy. Public checks require the exact live production
+BasarKasse route and reloads Caddy. Public HTTPS checks run on the Ubuntu host: the application backend network is
+intentionally internal and cannot resolve/reach the public Internet. Do not add
+outbound network access to the app just to run a deployment probe.
+Public checks require the exact live production
 installation and denial of anonymous event access/demo login. It does not consume
 operator invitation codes or create financial test rows. Keep evaluation data and
 container retained privately, with no competing public route.
