@@ -4,9 +4,10 @@ A web cash register for community consignment bazaars. Cashiers enter seller
 numbers and prices; managers reconcile tills and pay sellers after sales end.
 The interface is German. Project documentation and contribution guidance are English.
 
-**Status: protected evaluation remains the deployed public service. A separate
-production profile can be prepared; real-money use still requires event sign-off.**
-Six tills have synthetic test evidence, with venue/device acceptance still open.
+**Status: the self-hosted production service was launched with owner approval on
+19 November 2026 for the two-till Spielzeugbasar on 21 November.** The default
+local profile remains evaluation. Six tills are the future Babybasar target and
+need separate event/device acceptance. See the [launch record](docs/testing/results-production-launch-2026-11-19.md).
 See the [production readiness gates](docs/production-readiness.md) and
 [measured test results](docs/testing/results-event-workflow-2026-11-10.md) before planning a live event.
 
