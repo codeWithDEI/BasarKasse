@@ -11,3 +11,10 @@ export async function installation(){
  if(!row||row.mode!==(productionMode()?'production':'evaluation'))throw new ApiError('Datenbank und Betriebsart passen nicht zusammen. Bitte die technische Leitung hinzuziehen.',503,'MODE_MISMATCH');
  return row;
 }
+
+// Explicit, time-limited incident override. Invalid/expired values fail closed.
+export function deviceRequired(now=Date.now()){
+ if(!productionMode())return false;
+ const until=process.env.BASAR_DEVICE_BYPASS_UNTIL;
+ return !until||!Number.isFinite(Date.parse(until))||Date.parse(until)<=now;
+}

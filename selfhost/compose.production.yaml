@@ -12,6 +12,7 @@ services:
     environment:
       NODE_ENV: production
       BASAR_MODE: production
+      BASAR_DEVICE_BYPASS_UNTIL: ${BASAR_DEVICE_BYPASS_UNTIL:-}
       PORT: 3000
       HOSTNAME: 0.0.0.0
       BASAR_TEAM_PIN_KEY: ${BASAR_TEAM_PIN_KEY:?Set the stable production PIN key}

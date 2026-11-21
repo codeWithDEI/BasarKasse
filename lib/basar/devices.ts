@@ -1,7 +1,7 @@
 import {database} from './database';
 import {ApiError} from './operations';
 import {digest} from './credentials.ts';
-import {installation,productionMode} from './installation';
+import {installation,productionMode,deviceRequired} from './installation';
 import {publicOrigin} from './http';
 import type {Person} from './domain';
 export type TrustedDevice={id:string;label:string;kind:'register'|'management';event_id:string|null;till_number:number|null;expires_at:number};
@@ -11,19 +11,19 @@ export async function deviceForRequest(request:Request):Promise<TrustedDevice|nu
  const token=request.headers.get('cookie')?.match(/(?:^|; )basar_device=([^;]+)/)?.[1];if(!validToken(token))return null;
  return database().prepare('SELECT id,label,kind,event_id,till_number,expires_at FROM trusted_devices WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?').bind(await digest(token),Date.now()).first<TrustedDevice>();
 }
-export async function requireDevice(request:Request){const device=await deviceForRequest(request);if(productionMode()&&!device)throw new ApiError('Dieses Tablet muss einmal durch die Kassenleitung freigeschaltet werden.',403,'DEVICE_REQUIRED');return device;}
+export async function requireDevice(request:Request){if(!deviceRequired())return null;const device=await deviceForRequest(request);if(productionMode()&&!device)throw new ApiError('Dieses Tablet muss einmal durch die Kassenleitung freigeschaltet werden.',403,'DEVICE_REQUIRED');return device;}
 export function assertDevicePerson(device:TrustedDevice,user:Person){
  if((device.kind==='register'&&(user.role!=='cashier'||user.event_id!==device.event_id||user.till_number!==device.till_number))||(device.kind==='management'&&device.event_id&&user.event_id!==device.event_id))throw new ApiError('Diese Person ist auf diesem Gerät nicht freigegeben.',403,'DEVICE_SCOPE_MISMATCH');
 }
 export async function currentDeviceForPerson(user:Person){
- await installation();if(!productionMode())return;
+ await installation();if(!deviceRequired())return;
  if(!user.device_id)throw new ApiError('Die Gerätefreigabe fehlt.',403,'DEVICE_REQUIRED');
  const device=await database().prepare('SELECT id,label,kind,event_id,till_number,expires_at FROM trusted_devices WHERE id=? AND token_hash IS NOT NULL AND revoked_at IS NULL AND expires_at>?').bind(user.device_id,Date.now()).first<TrustedDevice>();
  if(!device)throw new ApiError('Die Gerätefreigabe ist abgelaufen oder wurde gesperrt.',403,'DEVICE_REQUIRED');assertDevicePerson(device,user);
 }
 export async function accessState(request:Request){
  const state=await installation(),device=await deviceForRequest(request);
- return {mode:state.mode,phase:state.phase,installationId:state.installation_id,device:device?{label:device.label,kind:device.kind,eventId:device.event_id,tillNumber:device.till_number}:null};
+ return {mode:state.mode,phase:state.phase,installationId:state.installation_id,deviceRequired:deviceRequired(),device:device?{label:device.label,kind:device.kind,eventId:device.event_id,tillNumber:device.till_number}:null};
 }
 export async function claimDevice(request:Request,code:unknown,nonce:unknown){
  await installation();if(!productionMode())throw new ApiError('Gerätefreigabe ist nur im Produktivbetrieb verfügbar.',404);
