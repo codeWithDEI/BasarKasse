@@ -199,3 +199,20 @@ A full restore revokes every old device/session, changes the epoch and pauses
 writes. Issue a new management invitation offline, reconcile missing receipts
 and pending tablets, then use the dedicated restore-release process. Fresh
 activation is intentionally unavailable for a restored live database.
+
+
+## Time-limited incident access
+
+An explicit operator environment override, `BASAR_DEVICE_BYPASS_UNTIL`, can suspend
+the device-enrollment gate until an absolute ISO timestamp. The owner requested
+this exception for 21 November 2026; the deployed expiry is 2026-11-21T23:00:00Z
+(midnight Europe/Berlin). Cashiers retain personal PIN authentication and their
+server-side event/till scopes. Managers retain their strong passwords. Origin,
+session, authorization-version, epoch, atomic booking and replay checks remain.
+
+An absent, invalid or expired override requires device enrollment again. Existing
+grants are retained. After expiry, sessions issued without device binding need
+valid device enrollment and reauthentication. Unauthenticated users can see event
+metadata/login names while the exception is active, never financial records.
+Clients must reload the updated page to receive the explicit `deviceRequired:false`
+access flag. This is an incident exception, not a change to default production access.
